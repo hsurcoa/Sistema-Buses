@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo - Sistema de Impresión de Tickets Térmicos</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 0;
+        }
+
+        .demo-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border: none;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 20px;
+        }
+
+        .btn-print {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 30px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-print:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .data-preview {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .data-item:last-child {
+            border-bottom: none;
+        }
+
+        .data-label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .data-value {
+            color: #212529;
+        }
+
+        .icon-bus {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <!-- Header -->
+        <div class="text-center text-white mb-4">
+            <div class="icon-bus">🚌</div>
+            <h1 class="fw-bold">Sistema de Impresión de Tickets</h1>
+            <p class="lead">BusDriver Transporte - Demo Interactivo</p>
+        </div>
+
+        <!-- Card Principal -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="bi bi-printer"></i> Demostración de Ticket Térmico
+                </h3>
+            </div>
+            <div class="card-body p-4">
+                <!-- Instrucciones -->
+                <div class="alert alert-info" role="alert">
+                    <h5 class="alert-heading">📋 Instrucciones</h5>
+                    <p class="mb-0">
+                        Haz clic en el botón "Imprimir Ticket de Prueba" para generar una vista previa 
+                        del ticket térmico. Se abrirá una nueva ventana con el ticket listo para imprimir.
+                    </p>
+                </div>
+
+                <!-- Botón de Impresión -->
+                <div class="text-center my-4">
+                    <button onclick="probarImpresion()" class="btn btn-primary btn-lg btn-print">
+                        🖨️ Imprimir Ticket de Prueba
+                    </button>
+                </div>
+
+                <!-- Vista Previa de Datos -->
+                <div class="data-preview">
+                    <h5 class="mb-3">📊 Datos del Boleto de Ejemplo</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Información del Viaje</h6>
+                            <div class="data-item">
+                                <span class="data-label">Número de Boleto:</span>
+                                <span class="data-value">100 - 000016</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Fecha de Viaje:</span>
+                                <span class="data-value">30/04/2021</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Hora de Salida:</span>
+                                <span class="data-value">05:00</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Placa del Bus:</span>
+                                <span class="data-value">RG-2965</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Origen:</span>
+                                <span class="data-value">Huacho</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Destino:</span>
+                                <span class="data-value">Lima</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Asiento:</span>
+                                <span class="data-value badge bg-primary">45</span>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Información del Pasajero</h6>
+                            <div class="data-item">
+                                <span class="data-label">Nombre:</span>
+                                <span class="data-value">DANIEL PACHAS MAGALLANES</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Documento:</span>
+                                <span class="data-value">45484645</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Fecha Expedición:</span>
+                                <span class="data-value">29/04/2021</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Importe:</span>
+                                <span class="data-value text-success fw-bold">S/ 25.00</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">En Letras:</span>
+                                <span class="data-value small">VEINTICINCO CON 00/100 SOLES</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Características -->
+                <div class="mt-4">
+                    <h5 class="mb-3">✨ Características del Sistema</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li>✅ Optimizado para papel térmico 80mm</li>
+                                <li>✅ Generación automática de código QR</li>
+                                <li>✅ Conversión de números a letras</li>
+                                <li>✅ Diseño profesional y limpio</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li>✅ Estilos @media print optimizados</li>
+                                <li>✅ Compatible con impresoras POS</li>
+                                <li>✅ JavaScript puro (sin dependencias)</li>
+                                <li>✅ Fácil integración con cualquier sistema</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Código de Integración -->
+                <div class="mt-4">
+                    <h5 class="mb-3">💻 Ejemplo de Integración</h5>
+                    <pre class="bg-dark text-light p-3 rounded"><code>// 1. Incluir la librería QRCode.js
+&lt;script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"&gt;&lt;/script&gt;
+
+// 2. Incluir el archivo de impresión
+&lt;script src="assets/js/impresion-ticket.js"&gt;&lt;/script&gt;
+
+// 3. Llamar la función con tus datos
+const misDatos = {
+    numeroBoleto: '100 - 000016',
+    fechaViaje: '2021-04-30',
+    horaSalida: '05:00:00',
+    placaBus: 'RG-2965',
+    origen: 'Huacho',
+    destino: 'Lima',
+    asiento: '45',
+    nombrePasajero: 'DANIEL PACHAS MAGALLANES',
+    documentoPasajero: '45484645',
+    importe: 25.00
+};
+
+imprimirTicket(misDatos);</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-white mt-4">
+            <p class="mb-0">© 2024 BusDriver Transporte - Sistema POS</p>
+        </div>
+    </div>
+
+    <!-- Script de Impresión -->
+    <script src="assets/js/impresion-ticket.js"></script>
+    
+    <script>
+        function probarImpresion() {
+            // Usar el objeto de ejemplo definido en impresion-ticket.js
+            imprimirTicket(datosBoletoEjemplo);
+        }
+
+        // También puedes probar con datos personalizados
+        function imprimirConDatosPersonalizados() {
+            const datosPersonalizados = {
+                empresaDireccion: 'Av. Principal 123',
+                empresaTelefono: '987654321',
+                empresaEmail: 'contacto@miempresa.com',
+                empresaRuc: '20123456789',
+                numeroBoleto: '200 - 000001',
+                fechaViaje: '2024-12-25',
+                horaSalida: '08:30:00',
+                placaBus: 'ABC-123',
+                origen: 'Lima',
+                destino: 'Cusco',
+                asiento: '12',
+                nombrePasajero: 'JUAN PEREZ GARCIA',
+                documentoPasajero: '12345678',
+                fechaExpedicion: '2024-12-20',
+                importe: 150.00
+            };
+            
+            imprimirTicket(datosPersonalizados);
+        }
+    </script>
+</body>
+</html>

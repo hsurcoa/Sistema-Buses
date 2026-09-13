@@ -1,0 +1,29 @@
+/vendor/
+/node_modules/
+/storage/*.key
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+/bootstrap/cache/*
+!/storage/framework/cache/.gitignore
+!/storage/framework/sessions/.gitignore
+!/storage/framework/views/.gitignore
+!/storage/logs/.gitignore
+!/bootstrap/cache/.gitignore
+.env
+.env.backup
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/public/hot
+/public/storage
+
+# Backups de BD (pueden pesar mucho / tener datos reales)
+backups/*.sql
+backups/*.zip
+
+# Carpetas temporales de la migración
+tmp_laravel/

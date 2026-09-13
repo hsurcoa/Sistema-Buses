@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS `personal` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `nombres` varchar(100) NOT NULL,
+  `apellidos` varchar(100) NOT NULL,
+  `tipo_documento` varchar(20) DEFAULT NULL,
+  `numero_documento` varchar(20) DEFAULT NULL,
+  `genero` varchar(20) DEFAULT NULL,
+  `fecha_nacimiento` date DEFAULT NULL,
+  `celular` varchar(20) DEFAULT NULL,
+  `email` varchar(100) DEFAULT NULL,
+  `direccion_domicilio` varchar(255) DEFAULT NULL,
+  `departamento` varchar(100) DEFAULT NULL,
+  `provincia` varchar(100) DEFAULT NULL,
+  `distrito` varchar(100) DEFAULT NULL,
+  `perfil` varchar(50) DEFAULT NULL,
+  `foto` varchar(255) DEFAULT NULL,
+  `estado` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

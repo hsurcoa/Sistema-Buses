@@ -1,0 +1,83 @@
+CRITICAL ERROR ControladorTransacciones: El asiento 3 ya está ocupado.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 3 ya está ocupado.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 28 ya está ocupado.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 16 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 4 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 5 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 10 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 9 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 14 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 4 ya está ocupado en el viaje #1. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(98): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 8 ya está ocupado en el viaje #1. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(105): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 21 ya está ocupado en el viaje #2. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(105): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 8 ya está ocupado en el viaje #10. Por favor, recargue la página (F5) y seleccione otro asiento.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(105): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}BACKUP ERROR: File not found: C:\xampp\htdocs\venta-pasajes\backups\TEST_FILE_NOT_EXISTS.zipBACKUP DEBUG: Input Filename: TEST_FILE_NOT_EXISTS.zipBACKUP ERROR: File not found: C:\xampp\htdocs\venta-pasajes\backups\backup_files_2025-12-31_01-05.zipBACKUP DEBUG: Input Filename: backup_files_2025-12-31_01-05.zipBACKUP WARNING: Cleaning up ghost entry: C:\xampp\htdocs\venta-pasajes\backups\backup_files_2025-12-31_01-08.zipCRITICAL ERROR ControladorTransacciones: SQLSTATE[23000]: Integrity constraint violation: 1452 Cannot add or update a child row: a foreign key constraint fails (`sistema_transportes`.`boletos`, CONSTRAINT `boletos_ibfk_4` FOREIGN KEY (`sesion_caja_id`) REFERENCES `sesiones_caja` (`id`))
+#0 C:\xampp\htdocs\venta-pasajes\app\core\Database.php(73): PDOStatement->execute()
+#1 C:\xampp\htdocs\venta-pasajes\app\models\RutaModel.php(794): Database->execute()
+#2 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(105): RutaModel->registrarVentaTransaccion(Array)
+#3 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#4 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#5 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#6 {main}CRITICAL ERROR ControladorTransacciones: No tienes una Caja Abierta. Debes abrir caja para realizar ventas.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(105): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(53): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: No tienes una Caja Abierta. Debes abrir caja para realizar ventas.
+#0 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(116): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\app\controllers\ControladorTransacciones.php(63): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\public\index.php(6): App->__construct()
+#4 {main}

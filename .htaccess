@@ -1,0 +1,31 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine on
+  
+  # Root always goes to public/ (MVC Dashboard)
+  RewriteRule ^$ public/ [L]
+
+  # Other requests: if it's not a real file/dir, rewrite to public/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule (.*) public/$1 [L]
+</IfModule>
+
+# ===================================================
+# CONTROL DE CACHÉ PARA ARCHIVOS ESTÁTICOS
+# ===================================================
+# Solución al problema de caché en navegadores
+# Los archivos CSS y JS se recargarán siempre desde el servidor
+
+<IfModule mod_headers.c>
+  # Desactivar caché para archivos CSS y JS durante desarrollo
+  <FilesMatch "\.(css|js)$">
+      Header set Cache-Control "no-cache, no-store, must-revalidate"
+      Header set Pragma "no-cache"
+      Header set Expires "0"
+  </FilesMatch>
+  
+  # NOTA: Para producción, comentar lo anterior y descomentar lo siguiente:
+  # <FilesMatch "\.(css|js)$">
+  #     Header set Cache-Control "max-age=31536000, public"
+  # </FilesMatch>
+</IfModule>

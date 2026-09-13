@@ -1,0 +1,222 @@
+/* =========================================
+   Sidebar Mini "Bala de Plata" Logic
+   ========================================= */
+
+/* Configuración Base del Sidebar */
+.app-sidebar {
+    /* AdminLTE ya define posicion y colores, aqui controlamos la animacion */
+    transition: width 0.3s ease;
+    /* Suavidad requerida */
+    overflow: hidden;
+    /* Ocultar textos largos al encoger */
+    white-space: nowrap;
+    /* Evitar saltos de linea */
+    z-index: 1050;
+    /* Z-index alto para flotar (AdminLTE usa ~1040) */
+}
+
+/* Evitar que el texto se rompa o desaparezca bruscamente */
+.app-sidebar .nav-link p,
+.app-sidebar .brand-text,
+.app-sidebar .nav-arrow,
+.app-sidebar .user-panel .info {
+    white-space: nowrap;
+    transition: opacity 0.2s, width 0.2s;
+    opacity: 1;
+}
+
+/* --- ESTADO COLAPSADO (Activado por JS: sidebar-collapsed) --- */
+
+/* 1. Reducir ancho a 70px (Solo Iconos) */
+body.sidebar-collapsed .app-sidebar {
+    width: 70px !important;
+    min-width: 70px !important;
+}
+
+/* 2. Ajustar el margen del contenido principal para que acompañe al sidebar */
+/* Nota: Si queremos que el sidebar FLOTE sobre el contenido al expandirse, el margen debe quedarse en 70px */
+body.sidebar-collapsed .app-main,
+body.sidebar-collapsed .app-wrapper,
+body.sidebar-collapsed .app-footer,
+body.sidebar-collapsed .app-header {
+    margin-left: 70px !important;
+    transition: margin-left 0.3s ease;
+    width: calc(100% - 70px);
+}
+
+/* 3. Ocultar texto totalmente en modo mini */
+body.sidebar-collapsed .app-sidebar .nav-link p,
+body.sidebar-collapsed .app-sidebar .brand-text,
+body.sidebar-collapsed .app-sidebar .nav-arrow,
+body.sidebar-collapsed .app-sidebar .nav-badge,
+body.sidebar-collapsed .app-sidebar .user-panel .info,
+body.sidebar-collapsed .app-sidebar .nav-header {
+    opacity: 0;
+    visibility: hidden;
+    width: 0;
+    display: none;
+    /* Para asegurar que no ocupen espacio */
+}
+
+/* 4. Centrar los iconos en la columna estrecha */
+body.sidebar-collapsed .app-sidebar .nav-link {
+    text-align: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+body.sidebar-collapsed .app-sidebar .nav-link i {
+    margin-right: 0;
+    font-size: 1.2rem;
+}
+
+body.sidebar-collapsed .app-sidebar .brand-link {
+    text-align: center;
+    padding: 0;
+    justify-content: center;
+}
+
+body.sidebar-collapsed .app-sidebar .brand-image {
+    margin: 0;
+}
+
+/* --- ESTADO HOVER (Solo cuando está colapsado) --- */
+
+/* 1. Expandir sidebar visualmente */
+body.sidebar-collapsed .app-sidebar:hover {
+    width: 250px !important;
+    /* Vuelve al ancho original */
+    box-shadow: 5px 0 15px rgba(0, 0, 0, 0.3);
+    /* Sombra elegante */
+}
+
+/* 2. Mostrar texto de nuevo */
+body.sidebar-collapsed .app-sidebar:hover .nav-link p,
+body.sidebar-collapsed .app-sidebar:hover .brand-text,
+body.sidebar-collapsed .app-sidebar:hover .nav-arrow,
+body.sidebar-collapsed .app-sidebar:hover .nav-badge,
+body.sidebar-collapsed .app-sidebar:hover .nav-header {
+    opacity: 1;
+    visibility: visible;
+    width: auto;
+    display: inline-block;
+    /* O block segun el elemento */
+    transition-delay: 0.1s;
+    /* Pequeño retraso para elegancia */
+}
+
+/* Ajustes finos de visualización en hover */
+body.sidebar-collapsed .app-sidebar:hover .nav-link {
+    text-align: left;
+    padding-left: 1rem;
+}
+
+body.sidebar-collapsed .app-sidebar:hover .nav-link i {
+    margin-right: .5rem;
+}
+
+body.sidebar-collapsed .app-sidebar:hover .brand-link {
+    justify-content: start;
+    padding-left: 1rem;
+}
+
+body.sidebar-collapsed .app-sidebar:hover .brand-image {
+    margin-right: .5rem;
+}
+
+body.sidebar-collapsed .app-sidebar:hover .nav-header {
+    display: block;
+}
+
+/* =========================================
+   Global Branding Styles (Valhalla Theme)
+   ========================================= */
+
+/* Forzar layout vertical en el sidebar brand y permitir crecimiento en altura */
+.sidebar-brand {
+    height: auto !important;
+    min-height: 60px !important;
+    padding: 0 !important;
+}
+
+.sidebar-brand .brand-link {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding-top: 15px !important;
+    padding-bottom: 15px !important;
+    height: auto !important;
+    transition: all 0.3s ease;
+}
+
+.brand-text-valhalla {
+    font-family: 'Times New Roman', serif;
+    /* Serif clásica elegante */
+    font-weight: 800;
+    /* Más bold */
+    font-size: 1.25rem;
+    /* Aumentado para mejor presencia */
+    line-height: 1.2;
+    letter-spacing: 0.5px;
+    color: #1a202c;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    display: block;
+    width: 100%;
+    white-space: normal;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    /* Sutil profundidad */
+}
+
+.brand-subtitle {
+    font-family: var(--font-main, sans-serif);
+    font-size: 0.58rem;
+    /* Ajuste micrométrico */
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    /* Más espaciado para elegancia */
+    color: #718096;
+    font-weight: 700;
+    display: block;
+    opacity: 0.85;
+    margin-top: 4px;
+}
+
+/* =========================================
+   Global Dark Mode Overrides
+   ========================================= */
+
+body.dark-mode {
+    /* Redefinición Global de Variables para Dark Mode */
+    --color-bg: #121212 !important;
+    /* Fondo casi negro */
+    --color-card-bg: #1E1E1E !important;
+    /* Tarjetas gris oscuro */
+    --color-text: #E0E0E0 !important;
+    --color-border: #333333 !important;
+
+    /* Forzar variables de AdminLTE/Bootstrap */
+    --bs-body-bg: #121212;
+    --bs-body-color: #E0E0E0;
+}
+
+/* Sidebar Branding en Dark Mode */
+body.dark-mode .app-sidebar {
+    background-color: #1A1A1A !important;
+    border-right: 1px solid #333333 !important;
+}
+
+body.dark-mode .sidebar-brand {
+    background-color: #1A1A1A !important;
+    border-bottom: 1px solid #333333 !important;
+}
+
+body.dark-mode .brand-text-valhalla {
+    color: #F8F9FA !important;
+}
+
+body.dark-mode .brand-subtitle {
+    color: #A0AEC0 !important;
+}

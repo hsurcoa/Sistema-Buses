@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Cotizador de Encomiendas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; }
+        .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">Prueba de Integración: Sistema de Paradas</h1>
+        
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Simulador de Venta / Encomienda</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="cotizadorForm">
+                            <div class="mb-3">
+                                <label for="ruta_id" class="form-label">ID de Ruta (Prueba con ID de ruta existente, ej: 1)</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="ruta_id" value="1">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="cargarRuta()">Cargar Datos</button>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <div id="panel_opciones" style="display:none;">
+                                <div class="mb-3">
+                                    <label for="parada_destino" class="form-label">Destino / Parada</label>
+                                    <select class="form-select" id="parada_destino" onchange="calcularLocal()">
+                                        <option value="">Seleccione destino...</option>
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tipo de Servicio</label>
+                                    <div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="tipo_servicio" id="tipo_pasajero" value="pasajero" checked onchange="toggleEncomienda()">
+                                            <label class="form-check-label" for="tipo_pasajero">Pasajero</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="tipo_servicio" id="tipo_encomienda" value="encomienda" onchange="toggleEncomienda()">
+                                            <label class="form-check-label" for="tipo_encomienda">Encomienda</label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3" id="div_paquete" style="display:none;">
+                                    <label for="tipo_paquete" class="form-label">Tipo de Paquete</label>
+                                    <select class="form-select" id="tipo_paquete" onchange="calcularLocal()">
+                                        <!-- Se llena dinámicamente -->
+                                    </select>
+                                </div>
+
+                                <div class="alert alert-success text-center">
+                                    <h3>Total: <span id="precio_total">0.00</span> Bs</h3>
+                                    <small id="detalle_calculo" class="text-muted"></small>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = '/venta-pasajes'; // Ajustar según entorno
+
+        async function cargarRuta() {
+            const rutaId = document.getElementById('ruta_id').value;
+            if(!rutaId) return alert('Ingrese un ID de ruta');
+
+            try {
+                // Llamada al endpoint implementado
+                const response = await fetch(`${BASE_URL}/admin/obtener_info_ruta_json/${rutaId}`);
+                const data = await response.json();
+
+                if(data.status === 'error') {
+                    alert('Error: ' + data.message);
+                    return;
+                }
+
+                // Poblar Paradas
+                const selectParada = document.getElementById('parada_destino');
+                selectParada.innerHTML = '<option value="">Seleccione destino...</option>';
+                
+                data.paradas.forEach(p => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.text = p.nombre; // Usamos nombre simple para luego agregar precio dinámicamente
+                    
+                    // Guardamos precios en data-attributes para cálculo local rápido
+                    option.dataset.precioPasaje = p.precio_pasaje;
+                    option.dataset.precioEncomienda = p.precio_encomienda;
+                    option.dataset.labelPasajero = p.label_pasajero;
+                    option.dataset.labelEncomienda = p.label_encomienda;
+                    
+                    selectParada.appendChild(option);
+                });
+
+                // Poblar Tipos de Paquete
+                const selectPaquete = document.getElementById('tipo_paquete');
+                selectPaquete.innerHTML = '';
+                
+                if(data.catalogos && data.catalogos.paquetes) {
+                    data.catalogos.paquetes.forEach(pq => {
+                        const option = document.createElement('option');
+                        option.value = pq.id;
+                        option.text = `${pq.nombre} (+${pq.precio_extra} Bs)`;
+                        option.dataset.extra = pq.precio_extra;
+                        selectPaquete.appendChild(option);
+                    });
+                }
+
+                document.getElementById('panel_opciones').style.display = 'block';
+                alert('Datos cargados correctamente. Pruebe las opciones.');
+                
+            } catch (e) {
+                console.error(e);
+                alert('Error al conectar con el servidor. Verifique consola.');
+            }
+        }
+
+        function toggleEncomienda() {
+            const esEncomienda = document.getElementById('tipo_encomienda').checked;
+            document.getElementById('div_paquete').style.display = esEncomienda ? 'block' : 'none';
+            calcularLocal();
+        }
+
+        function calcularLocal() {
+            const selectParada = document.getElementById('parada_destino');
+            const opcionParada = selectParada.options[selectParada.selectedIndex];
+            
+            if(!opcionParada || !opcionParada.value) {
+                document.getElementById('precio_total').innerText = '0.00';
+                document.getElementById('detalle_calculo').innerText = '';
+                return;
+            }
+
+            const esEncomienda = document.getElementById('tipo_encomienda').checked;
+            let total = 0;
+            let detalle = '';
+
+            if (esEncomienda) {
+                // Cálculo Encomienda
+                const base = parseFloat(opcionParada.dataset.precioEncomienda || 0);
+                
+                const selectPaquete = document.getElementById('tipo_paquete');
+                const opcionPaquete = selectPaquete.options[selectPaquete.selectedIndex];
+                const extra = parseFloat(opcionPaquete ? opcionPaquete.dataset.extra : 0);
+                const nombrePaquete = opcionPaquete ? opcionPaquete.text : '';
+
+                total = base + extra;
+                detalle = `Base Destino (${base} Bs) + ${nombrePaquete}`;
+            } else {
+                // Cálculo Pasajero
+                total = parseFloat(opcionParada.dataset.precioPasaje || 0);
+                detalle = `Tarifa Pasajero a ${opcionParada.text}`;
+            }
+
+            document.getElementById('precio_total').innerText = total.toFixed(2);
+            document.getElementById('detalle_calculo').innerText = detalle;
+        }
+    </script>
+</body>
+</html>

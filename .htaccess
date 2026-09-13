@@ -1,13 +1,20 @@
 <IfModule mod_rewrite.c>
   RewriteEngine on
-  
-  # Root always goes to public/ (MVC Dashboard)
-  RewriteRule ^$ public/ [L]
 
-  # Other requests: if it's not a real file/dir, rewrite to public/
+  # === PUENTE TEMPORAL DE MIGRACION A LARAVEL (Fase 1) ===
+  # El arbol legacy se movio a legacy/. Mientras Laravel no este instalado
+  # en la raiz (Tarea 3+) y el LegacyBridgeController no tome el control
+  # (Tarea 7), estas reglas apuntan exactamente donde antes apuntaba
+  # "public/", pero dentro de legacy/, para no cortar el servicio.
+  # Al completar la Tarea 7 esto se reemplaza por el public/ de Laravel.
+
+  # Root always goes to legacy/public/ (MVC Dashboard)
+  RewriteRule ^$ legacy/public/ [L]
+
+  # Other requests: if it's not a real file/dir, rewrite to legacy/public/
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule (.*) public/$1 [L]
+  RewriteRule (.*) legacy/public/$1 [L]
 </IfModule>
 
 # ===================================================

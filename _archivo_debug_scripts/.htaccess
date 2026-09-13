@@ -1,0 +1,11 @@
+# Scripts de debug/diagnóstico archivados durante la migración a Laravel.
+# NO deben ser accesibles por web ni ejecutarse: bloqueo total.
+# Pendientes de borrado definitivo al cerrar la migración (ver spec, sección 3.1).
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

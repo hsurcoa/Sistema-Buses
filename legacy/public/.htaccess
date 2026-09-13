@@ -1,0 +1,10 @@
+<IfModule mod_rewrite.c>
+  Options -Multiviews
+  RewriteEngine On
+  # NOTA (migracion Laravel, Fase 1): ruta ajustada temporalmente porque
+  # este public/ ahora vive bajo legacy/. Ver .htaccess raiz.
+  RewriteBase /venta-pasajes/legacy/public
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule  ^(.+)$ index.php?url=$1 [QSA,L]
+</IfModule>

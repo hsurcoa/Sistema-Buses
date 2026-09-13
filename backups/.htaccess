@@ -1,0 +1,11 @@
+# Backups de la BD (contienen datos reales de clientes/boletos): bloqueo de acceso web.
+# Reubicación definitiva fuera del docroot está planificada para la Fase 8 del roadmap
+# de migración a Laravel; esto es un cierre inmediato de la exposición mientras tanto.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

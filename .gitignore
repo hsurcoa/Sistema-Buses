@@ -1,4 +1,5 @@
 /vendor/
+/legacy/vendor/
 /node_modules/
 /storage/*.key
 /storage/framework/cache/*

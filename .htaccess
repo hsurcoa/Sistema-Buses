@@ -8,6 +8,11 @@
   # "public/", pero dentro de legacy/, para no cortar el servicio.
   # Al completar la Tarea 7 esto se reemplaza por el public/ de Laravel.
 
+  # Scripts sueltos que viven en legacy/ (no en legacy/public/): login,
+  # logout y los ajax_*.php que se invocan por URL directa. Sin esta regla
+  # quedan 404/servidos por Dashboard en vez de por si mismos.
+  RewriteRule ^(login\.php|logout\.php|logout_force\.php|ajax_info_viaje\.php|ajax_mapa\.php)$ legacy/$1 [L]
+
   # Root always goes to legacy/public/ (MVC Dashboard)
   RewriteRule ^$ legacy/public/ [L]
 

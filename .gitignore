@@ -28,3 +28,8 @@ backups/*.zip
 
 # Carpetas temporales de la migración
 tmp_laravel/
+
+# Junctions NTFS hacia legacy/public/ (mismo contenido, evita duplicar
+# uploads/imagenes en el repo dos veces - ver Fase 1, Tarea 7).
+/public/img
+/public/uploads

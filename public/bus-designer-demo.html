@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Designer - Demo Standalone</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .demo-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .canvas-container {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .btn-group-custom {
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .info-panel {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="demo-container">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <h1 class="display-4">
+                    <i class="bi bi-bus-front text-primary"></i>
+                    Bus Designer Demo
+                </h1>
+                <p class="lead text-muted">Diseñador Visual de Distribución de Asientos</p>
+            </div>
+
+            <!-- Info Panel -->
+            <div class="info-panel">
+                <h5><i class="bi bi-info-circle me-2"></i>Instrucciones</h5>
+                <ul class="mb-0">
+                    <li>Haga clic en los botones para agregar elementos al canvas</li>
+                    <li>Arrastre los elementos para reposicionarlos (se ajustan automáticamente a la grilla)</li>
+                    <li>Haga doble clic sobre un elemento para eliminarlo</li>
+                    <li>Use los botones de piso para diseñar buses de 2 pisos</li>
+                    <li>Haga clic en "Exportar JSON" para ver la configuración generada</li>
+                </ul>
+            </div>
+
+            <div class="row">
+                <!-- Panel de Control -->
+                <div class="col-md-4">
+                    <h4 class="mb-3">Panel de Control</h4>
+                    
+                    <!-- Configuración Básica -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <i class="bi bi-gear"></i> Configuración
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre del Tipo</label>
+                                <input type="text" class="form-control" id="nombreBus" value="BUS DE 45 ASIENTOS">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Número de Pisos</label>
+                                <select class="form-select" id="numeroPisos" onchange="cambiarNumeroPisos()">
+                                    <option value="1">1 Piso</option>
+                                    <option value="2">2 Pisos</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Piso Actual</label>
+                                <div class="btn-group w-100" role="group">
+                                    <button type="button" class="btn btn-outline-primary active" id="btnPiso1Demo" onclick="cambiarPisoDemo(1)">
+                                        Piso 1
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary" id="btnPiso2Demo" onclick="cambiarPisoDemo(2)" disabled>
+                                        Piso 2
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Estadísticas -->
+                    <div class="stats-card mb-3">
+                        <h6 class="mb-2">Capacidad Total</h6>
+                        <h2 id="capacidadTotal">0</h2>
+                        <small>asientos</small>
+                    </div>
+
+                    <!-- Botones de Acción -->
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-success" onclick="exportarConfiguracion()">
+                            <i class="bi bi-download"></i> Exportar JSON
+                        </button>
+                        <button class="btn btn-info" onclick="mostrarEstadisticas()">
+                            <i class="bi bi-bar-chart"></i> Ver Estadísticas
+                        </button>
+                        <button class="btn btn-danger" onclick="limpiarTodoDemo()">
+                            <i class="bi bi-trash"></i> Limpiar Todo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="col-md-8">
+                    <h4 class="mb-3">Área de Diseño</h4>
+                    
+                    <!-- Botones de Elementos -->
+                    <div class="d-flex btn-group-custom mb-3">
+                        <button class="btn btn-success" onclick="agregarAsientoDemo()">
+                            <i class="bi bi-plus-circle"></i> Asiento
+                        </button>
+                        <button class="btn btn-secondary" onclick="agregarBanoDemo()">
+                            <i class="bi bi-door-closed"></i> Baño
+                        </button>
+                        <button class="btn btn-info" onclick="agregarEscaleraDemo()">
+                            <i class="bi bi-arrow-up"></i> Escalera
+                        </button>
+                        <button class="btn btn-warning" onclick="agregarConductorDemo()">
+                            <i class="bi bi-person-circle"></i> Conductor
+                        </button>
+                    </div>
+
+                    <!-- Canvas Container -->
+                    <div class="canvas-container">
+                        <div id="konvaStageDemo"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para JSON -->
+    <div class="modal fade" id="modalJSON" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-code-square"></i> Configuración JSON
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <pre id="jsonOutput" class="bg-dark text-light p-3 rounded" style="max-height: 400px; overflow: auto;"></pre>
+                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="copiarJSON()">
+                        <i class="bi bi-clipboard"></i> Copiar al Portapapeles
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <script src="js/bus-designer.js"></script>
+
+    <script>
+        // Instancia del diseñador
+        let designer = null;
+
+        // Inicializar al cargar la página
+        window.onload = function() {
+            designer = new BusDesigner('konvaStageDemo', {
+                width: 700,
+                height: 500
+            });
+            
+            actualizarCapacidadDemo();
+        };
+
+        // Funciones de botones
+        function agregarAsientoDemo() {
+            designer.agregarAsiento();
+            actualizarCapacidadDemo();
+        }
+
+        function agregarBanoDemo() {
+            designer.agregarBano();
+        }
+
+        function agregarEscaleraDemo() {
+            designer.agregarEscalera();
+        }
+
+        function agregarConductorDemo() {
+            designer.agregarConductor();
+        }
+
+        function limpiarTodoDemo() {
+            designer.limpiarTodo();
+            actualizarCapacidadDemo();
+        }
+
+        function cambiarNumeroPisos() {
+            const pisos = document.getElementById('numeroPisos').value;
+            document.getElementById('btnPiso2Demo').disabled = (pisos == 1);
+            
+            if (pisos == 1 && designer.pisoActual == 2) {
+                cambiarPisoDemo(1);
+            }
+        }
+
+        function cambiarPisoDemo(piso) {
+            designer.cambiarPiso(piso);
+            
+            document.getElementById('btnPiso1Demo').classList.remove('active');
+            document.getElementById('btnPiso2Demo').classList.remove('active');
+            document.getElementById('btnPiso' + piso + 'Demo').classList.add('active');
+            
+            actualizarCapacidadDemo();
+        }
+
+        function actualizarCapacidadDemo() {
+            const total = designer.contarAsientosTotales();
+            document.getElementById('capacidadTotal').textContent = total;
+        }
+
+        function exportarConfiguracion() {
+            const json = designer.exportarConfiguracion();
+            const formatted = JSON.stringify(JSON.parse(json), null, 2);
+            
+            document.getElementById('jsonOutput').textContent = formatted;
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalJSON'));
+            modal.show();
+        }
+
+        function copiarJSON() {
+            const texto = document.getElementById('jsonOutput').textContent;
+            navigator.clipboard.writeText(texto).then(() => {
+                alert('JSON copiado al portapapeles');
+            });
+        }
+
+        function mostrarEstadisticas() {
+            const total = designer.contarAsientosTotales();
+            const piso1 = designer.jsonPiso1.filter(e => e.tipo === 'asiento').length;
+            const piso2 = designer.jsonPiso2.filter(e => e.tipo === 'asiento').length;
+            
+            alert(`📊 Estadísticas del Diseño\n\n` +
+                  `Total de asientos: ${total}\n` +
+                  `Piso 1: ${piso1} asientos\n` +
+                  `Piso 2: ${piso2} asientos\n\n` +
+                  `Elementos totales: ${designer.jsonPiso1.length + designer.jsonPiso2.length}`);
+        }
+    </script>
+</body>
+</html>

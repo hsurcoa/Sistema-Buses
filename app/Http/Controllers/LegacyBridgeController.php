@@ -32,23 +32,56 @@ use Illuminate\Http\Response;
  */
 class LegacyBridgeController extends Controller
 {
+    /**
+     * Scripts sueltos que Apache servia como archivos reales antes de la
+     * migracion (sin pasar por App.php), agrupados por el directorio legacy
+     * del que cuelgan. login.php NO esta en esta lista a proposito: ese
+     * endpoint ya lo maneja Laravel nativamente (routes/auth.php, Tarea 8).
+     * logout.php SI sigue aqui (nadie lo migro: la UI real cierra sesion
+     * via /admin/logout, que ya funciona bien pasando por App.php).
+     */
+    private const LOOSE_SCRIPTS = [
+        // ruta tal como llega en $request->path() => carpeta base (relativa a base_path())
+        'ajax_info_viaje.php' => 'legacy',
+        'ajax_mapa.php' => 'legacy',
+        'logout.php' => 'legacy',
+        'logout_force.php' => 'legacy',
+        // usados por URL directa con el prefijo "public/" (p. ej.
+        // URLROOT.'/public/print_ticket.php' desde venta_pasajes.php)
+        'public/print_ticket.php' => 'legacy',
+        'public/clear_cache.php' => 'legacy',
+        'public/diagnostico_caja.php' => 'legacy',
+        'public/diagnostico_rutas.php' => 'legacy',
+    ];
+
     public function handle(Request $request): Response
     {
-        $legacyPublic = base_path('legacy/public');
+        $path = trim($request->path(), '/');
+        if ($path === '/') {
+            $path = '';
+        }
+
+        if (isset(self::LOOSE_SCRIPTS[$path])) {
+            $base = base_path(self::LOOSE_SCRIPTS[$path]);
+
+            return $this->requireScript(dirname($base.'/'.$path), basename($path));
+        }
 
         // Reproduce lo que hacia legacy/public/.htaccess:
         //   RewriteRule ^(.+)$ index.php?url=$1 [QSA,L]
-        $_GET['url'] = trim($request->path(), '/');
-        if ($request->path() === '/') {
-            $_GET['url'] = '';
-        }
+        $_GET['url'] = $path;
 
+        return $this->requireScript(base_path('legacy/public'), 'index.php');
+    }
+
+    private function requireScript(string $dir, string $script): Response
+    {
         $previousCwd = getcwd();
-        chdir($legacyPublic);
+        chdir($dir);
 
         ob_start();
         try {
-            require $legacyPublic.'/index.php';
+            require $dir.'/'.$script;
         } finally {
             $output = ob_get_clean();
             chdir($previousCwd ?: base_path());

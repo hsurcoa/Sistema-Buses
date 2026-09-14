@@ -266,6 +266,225 @@ class Admin extends Controller
         echo json_encode($personal);
     }
 
+    // =====================================================================
+    //  USUARIOS DEL SISTEMA (cuentas de acceso por rol)
+    //  Solo Administrador. Las cuentas con historial (boletos, cajas,
+    //  encomiendas) no se borran: se desactivan.
+    // =====================================================================
+
+    public function usuarios()
+    {
+        if (!$this->esAdministrador()) {
+            header('Location: ' . URLROOT . '/dashboard');
+            exit;
+        }
+
+        require_once '../app/models/UsuarioModel.php';
+        $usuarioModel = new UsuarioModel();
+
+        $data = [
+            'title' => 'Usuarios del sistema',
+            'usuarios' => $usuarioModel->listarUsuarios(),
+            'roles' => $usuarioModel->listarRolesActivos(),
+            'usuario_actual_id' => (int) $this->sessionManager->getUserId(),
+        ];
+
+        $this->view('layouts/header', $data);
+        $this->view('layouts/sidebar', $data);
+        $this->view('admin/usuarios', $data);
+        $this->view('layouts/footer', $data);
+    }
+
+    /** Crear o editar un usuario (AJAX, JSON). */
+    public function guardar_usuario()
+    {
+        $this->prepararRespuestaUsuarios();
+        require_once '../app/models/UsuarioModel.php';
+        $usuarioModel = new UsuarioModel();
+
+        $id = (int) ($_POST['id'] ?? 0);
+        $d = [
+            'id' => $id,
+            'nombres' => trim($_POST['nombres'] ?? ''),
+            'apellidos' => trim($_POST['apellidos'] ?? ''),
+            'email' => strtolower(trim($_POST['email'] ?? '')),
+            'username' => trim($_POST['username'] ?? ''),
+            'nro_documento' => trim($_POST['nro_documento'] ?? ''),
+            'celular' => trim($_POST['celular'] ?? ''),
+            'rol_id' => (int) ($_POST['rol_id'] ?? 0),
+            'activo' => !empty($_POST['activo']),
+        ];
+        $password = (string) ($_POST['password'] ?? '');
+        $generar = !empty($_POST['generar_password']);
+        $actual = $id ? $usuarioModel->obtenerUsuario($id) : null;
+        $miId = (int) $this->sessionManager->getUserId();
+
+        $errores = [];
+        if ($id && !$actual) {
+            $this->responderUsuarios(false, 'El usuario no existe.');
+        }
+        if ($d['nombres'] === '' || $d['apellidos'] === '') {
+            $errores[] = 'Nombres y apellidos son obligatorios.';
+        }
+        if (!filter_var($d['email'], FILTER_VALIDATE_EMAIL)) {
+            $errores[] = 'Ingrese un correo electrónico válido (se usa para iniciar sesión).';
+        } elseif ($usuarioModel->campoEnUso('email', $d['email'], $id)) {
+            $errores[] = 'El correo ' . $d['email'] . ' ya pertenece a otro usuario.';
+        }
+        if ($d['username'] !== '' && $usuarioModel->campoEnUso('username', $d['username'], $id)) {
+            $errores[] = 'El nombre de usuario ' . $d['username'] . ' ya está en uso.';
+        }
+        $rol = $usuarioModel->rolActivo($d['rol_id']);
+        if (!$rol) {
+            $errores[] = 'Seleccione un rol activo.';
+        }
+
+        if ($generar) {
+            $password = $this->generarPassword();
+        } elseif ($password !== '' || !$id) {
+            if (strlen($password) < 8) {
+                $errores[] = 'La contraseña debe tener al menos 8 caracteres.';
+            } elseif ($password !== (string) ($_POST['password_confirmacion'] ?? '')) {
+                $errores[] = 'La confirmación de la contraseña no coincide.';
+            }
+        }
+
+        // Protecciones sobre la propia cuenta y el ultimo administrador
+        if ($id && $id === $miId) {
+            if (!$d['activo']) {
+                $errores[] = 'No puede desactivar su propia cuenta.';
+            }
+            if ($rol && $rol->nombre !== 'Administrador') {
+                $errores[] = 'No puede quitarse a sí mismo el rol Administrador.';
+            }
+        }
+        if ($id && $actual && $actual->rol === 'Administrador' && $actual->estado === 'activo'
+            && (!$d['activo'] || ($rol && $rol->nombre !== 'Administrador'))
+            && $usuarioModel->contarAdministradoresActivos($id) === 0) {
+            $errores[] = 'Debe quedar al menos un Administrador activo.';
+        }
+
+        if ($errores) {
+            $this->responderUsuarios(false, implode(' ', $errores));
+        }
+
+        $d['password_hash'] = $password !== '' ? password_hash($password, PASSWORD_BCRYPT) : null;
+
+        try {
+            if ($id) {
+                $usuarioModel->actualizarUsuario($d);
+            } else {
+                $id = $usuarioModel->crearUsuario($d);
+            }
+        } catch (Exception $e) {
+            error_log('Admin::guardar_usuario: ' . $e->getMessage());
+            $this->responderUsuarios(false, 'No se pudo guardar el usuario.');
+        }
+
+        $this->responderUsuarios(true, $d['id'] ? 'Usuario actualizado.' : 'Usuario creado.', [
+            // Solo se devuelve la contraseña cuando la genero el sistema, para mostrarla una vez
+            'password_generada' => $generar ? $password : null,
+            'email' => $d['email'],
+        ]);
+    }
+
+    /** Activar o desactivar una cuenta (AJAX, JSON). */
+    public function estado_usuario()
+    {
+        $this->prepararRespuestaUsuarios();
+        require_once '../app/models/UsuarioModel.php';
+        $usuarioModel = new UsuarioModel();
+
+        $id = (int) ($_POST['id'] ?? 0);
+        $activar = !empty($_POST['activo']);
+        $usuario = $usuarioModel->obtenerUsuario($id);
+
+        if (!$usuario) {
+            $this->responderUsuarios(false, 'El usuario no existe.');
+        }
+        if (!$activar && $id === (int) $this->sessionManager->getUserId()) {
+            $this->responderUsuarios(false, 'No puede desactivar su propia cuenta.');
+        }
+        if (!$activar && $usuario->rol === 'Administrador' && $usuarioModel->contarAdministradoresActivos($id) === 0) {
+            $this->responderUsuarios(false, 'Debe quedar al menos un Administrador activo.');
+        }
+
+        $usuarioModel->cambiarEstadoUsuario($id, $activar);
+        $this->responderUsuarios(true, $activar ? 'Usuario activado.' : 'Usuario desactivado: ya no puede iniciar sesión.');
+    }
+
+    /** Eliminar definitivamente una cuenta SIN historial (AJAX, JSON). */
+    public function eliminar_usuario()
+    {
+        $this->prepararRespuestaUsuarios();
+        require_once '../app/models/UsuarioModel.php';
+        $usuarioModel = new UsuarioModel();
+
+        $id = (int) ($_POST['id'] ?? 0);
+        $usuario = $usuarioModel->obtenerUsuario($id);
+
+        if (!$usuario) {
+            $this->responderUsuarios(false, 'El usuario no existe.');
+        }
+        if ($id === (int) $this->sessionManager->getUserId()) {
+            $this->responderUsuarios(false, 'No puede eliminar su propia cuenta.');
+        }
+        if ($usuario->rol === 'Administrador' && $usuario->estado === 'activo' && $usuarioModel->contarAdministradoresActivos($id) === 0) {
+            $this->responderUsuarios(false, 'Debe quedar al menos un Administrador activo.');
+        }
+
+        if (!$usuarioModel->eliminarUsuarioSinHistorial($id)) {
+            $this->responderUsuarios(false, 'Este usuario tiene ventas, cajas o encomiendas registradas: no se puede eliminar sin perder el historial. Desactívelo en su lugar.');
+        }
+
+        // Rol sincronizado en spatie (Laravel) de esa cuenta
+        $db = new Database();
+        $db->query("DELETE FROM spatie_model_has_roles WHERE model_id = :id AND model_type = :tipo");
+        $db->bind(':id', $id);
+        $db->bind(':tipo', 'App\\Models\\Usuario');
+        $db->execute();
+
+        $this->responderUsuarios(true, 'Usuario eliminado.');
+    }
+
+    private function esAdministrador()
+    {
+        return ($_SESSION['rol'] ?? '') === 'Administrador';
+    }
+
+    private function prepararRespuestaUsuarios()
+    {
+        if (ob_get_level() > 0) ob_clean();
+        header('Content-Type: application/json; charset=utf-8');
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->responderUsuarios(false, 'Método no permitido.');
+        }
+        if (!$this->esAdministrador()) {
+            $this->responderUsuarios(false, 'Solo un Administrador puede gestionar usuarios.');
+        }
+        if (!$this->sessionManager->verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+            $this->responderUsuarios(false, 'La sesión expiró o el formulario es inválido. Recargue la página.');
+        }
+    }
+
+    private function responderUsuarios($ok, $mensaje, array $extra = [])
+    {
+        echo json_encode(array_merge(['status' => $ok ? 'success' : 'error', 'message' => $mensaje], $extra), JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    private function generarPassword()
+    {
+        // Sin caracteres ambiguos (0/O, 1/l/I) para dictarla o copiarla sin errores
+        $alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+        $password = '';
+        for ($i = 0; $i < 10; $i++) {
+            $password .= $alfabeto[random_int(0, strlen($alfabeto) - 1)];
+        }
+        return $password;
+    }
+
     public function logout()
     {
         // Iniciar sesión si no está iniciada (aunque el core ya lo hace, previene errores)

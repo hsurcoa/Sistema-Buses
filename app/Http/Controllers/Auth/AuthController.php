@@ -55,6 +55,13 @@ class AuthController extends Controller
                 ->with('mensaje_error', 'Credenciales inválidas.');
         }
 
+        // Cuenta desactivada por un administrador: no puede entrar
+        if ($usuario->estado !== 'activo') {
+            return back()
+                ->withInput($request->only('email'))
+                ->with('mensaje_error', 'Su cuenta está desactivada. Consulte con el administrador.');
+        }
+
         $session = $this->legacySession();
         $session->regenerateId();
         $session->setUserData([

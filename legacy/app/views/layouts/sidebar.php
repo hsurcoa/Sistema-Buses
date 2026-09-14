@@ -113,6 +113,14 @@ $logoEmpresa = !empty($config_sidebar['empresa_logo']) ? URLROOT . '/' . $config
                         </p>
                     </a>
                     <ul class="nav nav-treeview">
+                        <?php if (($_SESSION['rol'] ?? '') === 'Administrador'): ?>
+                        <li class="nav-item">
+                            <a href="<?php echo URLROOT; ?>/admin/usuarios" class="nav-link">
+                                <i class="nav-icon fas fa-users-cog"></i>
+                                <p>Usuarios del sistema</p>
+                            </a>
+                        </li>
+                        <?php endif; ?>
                         <li class="nav-item">
                             <a href="<?php echo URLROOT; ?>/admin/roles_permisos" class="nav-link">
                                 <i class="nav-icon fas fa-key"></i>

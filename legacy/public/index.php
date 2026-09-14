@@ -2,6 +2,20 @@
 // Cargar el iniciador (bootstrap)
 require_once '../app/bootstrap.php';
 
+// Cuenta desactivada por un administrador: la sesion abierta deja de valer.
+// El rol se relee de la BD para que un cambio de rol aplique sin re-login.
+if ($sessionManager->isAuthenticated()) {
+    $dbSesion = new Database();
+    $dbSesion->query("SELECT u.estado, r.nombre AS rol FROM usuarios u LEFT JOIN roles r ON r.id = u.rol_id WHERE u.id = :id");
+    $dbSesion->bind(':id', $sessionManager->getUserId());
+    $cuenta = $dbSesion->single();
+    if (!$cuenta || $cuenta->estado !== 'activo') {
+        $sessionManager->destroy();
+    } elseif ($cuenta->rol && ($_SESSION['rol'] ?? null) !== $cuenta->rol) {
+        $_SESSION['rol'] = $cuenta->rol;
+    }
+}
+
 // Todo el sistema es de uso interno: sin sesion no se sirve ninguna pantalla
 // ni endpoint. Antes varias pantallas (dashboard, venta de pasajes, admin...)
 // se mostraban como "Invitado" y el error recien aparecia al intentar vender

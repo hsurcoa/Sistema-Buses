@@ -3,17 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Spatie\Permission\Traits\HasRoles;
 
 /**
  * Usuario del sistema (tabla `usuarios`, ya existente).
  *
  * Mapea la tabla tal cual esta hoy: un rol por usuario (rol_id), sin
  * remember_token ni updated_at. El RBAC real (roles/permisos/rol_permiso)
- * se sincroniza hacia spatie/laravel-permission - ver RbacSyncSeeder
- * (Fase 1, Tarea 9).
+ * se sincroniza hacia spatie/laravel-permission - ver App\Services\LegacyRbacSync
+ * y el comando `php artisan rbac:sync` (Fase 1, Tarea 9).
  */
 class Usuario extends Authenticatable
 {
+    use HasRoles;
+
+    protected $guard_name = 'web';
+
     protected $table = 'usuarios';
 
     // La tabla no tiene columna updated_at.

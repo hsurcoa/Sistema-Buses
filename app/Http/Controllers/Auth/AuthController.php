@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Usuario;
+use App\Services\LegacyRbacSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 /**
@@ -38,7 +40,7 @@ class AuthController extends Controller
         return view('auth.login');
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(Request $request, LegacyRbacSync $rbacSync): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -66,6 +68,18 @@ class AuthController extends Controller
         // Auth::user()/auth middleware mas adelante (sesion propia, no
         // interfiere con el puente de arriba).
         Auth::login($usuario);
+
+        // RBAC spatie al dia con lo que el admin haya cambiado en el modulo
+        // legacy (Tarea 9). Todavia ninguna ruta depende de spatie, asi que un
+        // fallo aqui se registra pero no impide entrar a vender.
+        try {
+            $rbacSync->syncUser($usuario);
+        } catch (\Throwable $e) {
+            Log::error('RBAC: no se pudo sincronizar el usuario al iniciar sesion', [
+                'usuario_id' => $usuario->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return redirect('/dashboard');
     }

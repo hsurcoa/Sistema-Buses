@@ -13,10 +13,9 @@
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
-    # Redirect Trailing Slashes If Not A Folder...
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} (.+)/$
-    RewriteRule ^ %1 [L,R=301]
+    # (Redireccion de barra final de Laravel quitada: en este subdirectorio
+    # generaba Location con "/public/" visible y rompia URLs legacy como
+    # /ventas/. El router de Laravel ya ignora la barra final.)
 
     # Send Requests To Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d

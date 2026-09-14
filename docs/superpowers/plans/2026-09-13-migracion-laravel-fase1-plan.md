@@ -88,6 +88,48 @@ Cada tarea se hace y se verifica antes de pasar a la siguiente. El sistema debe 
 
 ---
 
+## Estado de ejecución (actualizado 2026-09-13)
+
+| Tarea | Estado |
+|---|---|
+| 1–5 | Hechas (ver commits) |
+| 6 — Puente de sesión | Hecha con otro mecanismo: Laravel NO comparte su motor de sesión con el legacy. `AuthController` abre la sesión nativa `SISTEMA_TRANSPORTES_SESSION` con la propia clase `SessionManager` y escribe las mismas claves que `legacy/login.php`. La sesión de Laravel (`venta_pasajes_laravel_session`) solo se usa para CSRF/flash del login. |
+| 7 — `LegacyBridgeController` | Hecha, **en producción** (el `.htaccess` raíz apunta a `public/` de Laravel). Cambió respecto al diseño: en vez de `require` en el mismo proceso (falla silenciosa con body vacío bajo Apache/mod_php en Windows) hace una petición HTTP loopback a `/__legacy/...`. Detalles abajo. |
+| 8 — Auth Laravel | Hecha (`routes/auth.php`, modelos `Usuario`/`Rol`/`Permiso`). |
+| 9 — spatie RBAC | Pendiente |
+| 10 — Cierre | Pendiente |
+
+### Detalles del puente (Tarea 7) que no estaban en el diseño
+
+- **Catch-all de todos los métodos** (`routes/legacy.php`, `Route::any`), no `Route::fallback`: `fallback` solo acepta GET/HEAD y dejaba **todos los POST** (ventas, caja, AJAX) respondiendo 405.
+- **Fuera del grupo `web`** (registrado con `then:` en `bootstrap/app.php`): sin CSRF de Laravel (el legacy trae el suyo), sin sesión de Laravel y sin cifrado de cookies, para que `SISTEMA_TRANSPORTES_SESSION` viaje intacta en ambos sentidos.
+- **Cuerpo crudo**: JSON/form se reenvían tal cual (el legacy lee `php://input` en Ventas, Boletos, Admin, ControladorTransacciones). Multipart se reconstruye desde `$_POST`/archivos (PHP no expone el cuerpo crudo multipart).
+- **Loopback fijo a 127.0.0.1** (configurable con `LEGACY_BRIDGE_URL`), timeout `LEGACY_BRIDGE_TIMEOUT` (300 s por defecto) y 504 si el legacy no responde.
+- **Tests**: `tests/Feature/LegacyBridgeTest.php` (Http::fake, sin BD).
+
+### Endurecimiento hecho al pasar a producción
+
+- `.htaccess` raíz: TODO request externo va a `public/` (antes `.env`, `composer.json`, `config/`, `routes/`, `database/`, `legacy/` y los `.md` de la raíz se podían descargar). `/__legacy` solo se acepta desde loopback.
+- `legacy/public/.htaccess`: rechaza (403) el acceso directo externo; solo se llega por la reescritura interna.
+- `.env`: `APP_ENV=production`, `APP_DEBUG=false`; `APP_KEY` regenerada porque había estado expuesta.
+- `public/.htaccess`: quitada la redirección de barra final de Laravel (mandaba `/ventas/` a `/public/ventas`).
+- `public/assets/js/impresion-ticket.js` copiado (vivía en `legacy/assets/`, fuera de todo docroot desde la Tarea 2).
+- Token CSRF vencido en el login → vuelve al login con aviso en vez de la página 419.
+- `PDO::ATTR_PERSISTENT` desactivado en `legacy/app/core/Database.php`.
+
+### Rollback
+
+`git show 69b1c90:.htaccess > .htaccess` vuelve a servir 100% desde `legacy/public/` (la reescritura es interna, así que el bloqueo de acceso directo en `legacy/public/.htaccess` no la afecta).
+
+### Pendientes conocidos
+
+- Logout legacy (`/admin/logout`) destruye la sesión nativa pero no la del guard de Laravel (`Auth::login`). Hoy no importa (ninguna ruta usa `auth`), pero debe resolverse antes de proteger rutas migradas con middleware `auth` (Fase 2/3): migrar el logout a Laravel o hacer que el guard valide contra la sesión nativa.
+- Paridad heredada, no introducida: `/dashboard`, `/ventas`, `/admin` y otros controladores legacy responden sin login (hallazgo de la auditoría; se cierra al migrar cada módulo con `auth`).
+- Scripts de diagnóstico (`public/clear_cache.php`, `diagnostico_caja.php`, `diagnostico_rutas.php`) siguen accesibles por paridad; retirarlos cuando se confirme que nadie los usa.
+- MySQL `root` sin contraseña (heredado de `legacy/app/config/config.php`).
+
+---
+
 ## Riesgos específicos de esta fase (más allá de los del spec)
 
 | Riesgo | Mitigación |

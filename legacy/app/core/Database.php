@@ -22,7 +22,10 @@ class Database
         // Configurar DSN
         $dsn = 'mysql:host=' . $this->host . ';dbname=' . $this->dbname;
         $options = array(
-            PDO::ATTR_PERSISTENT => true,
+            // PDO::ATTR_PERSISTENT deshabilitado (migracion Laravel, Fase 1):
+            // las conexiones PDO persistentes son una causa conocida de
+            // inestabilidad de mod_php en Windows bajo mpm_winnt (hilos
+            // reutilizados). No es necesaria para el volumen de este sistema.
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
         );
 

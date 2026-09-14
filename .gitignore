@@ -33,3 +33,6 @@ tmp_laravel/
 # uploads/imagenes en el repo dos veces - ver Fase 1, Tarea 7).
 /public/img
 /public/uploads
+
+# Claude Code
+.claude/scheduled_tasks.lock

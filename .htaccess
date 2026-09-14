@@ -1,25 +1,25 @@
 <IfModule mod_rewrite.c>
   RewriteEngine on
 
-  # === REVERTIDO TEMPORALMENTE (ver commit "Fase 1 - Tarea 7: bridge...") ===
-  # Se detecto que el front controller de Laravel devuelve respuestas con
-  # body vacio en este entorno Apache/mod_php (bajo investigacion, no es
-  # bug del codigo: hasta un Route::get() trivial sin vistas ni sesion
-  # reproduce el problema). Mientras se resuelve, el sitio real sigue
-  # sirviendose 100% desde legacy/ para no afectar el uso en curso.
+  # Passthrough interno hacia el legacy (ver LegacyBridgeController): fuerza
+  # a que legacy/public/index.php se ejecute como archivo real, en un
+  # hilo/proceso de Apache sin nada de Laravel cargado.
+  # SOLO desde loopback: el bridge siempre llama a 127.0.0.1, asi que
+  # nadie de afuera puede saltarse Laravel entrando por /__legacy.
+  RewriteCond %{REMOTE_ADDR} ^(127\.0\.0\.1|::1)$
+  RewriteRule ^__legacy/(.*)$ legacy/$1 [L]
 
-  RewriteRule ^(login\.php|logout\.php|logout_force\.php|ajax_info_viaje\.php|ajax_mapa\.php)$ legacy/$1 [L]
+  # Re-entrada tras una reescritura interna (la de arriba): dejar pasar.
+  RewriteCond %{ENV:REDIRECT_STATUS} !^$
+  RewriteRule ^ - [L]
 
-  RewriteRule ^$ legacy/public/ [L]
-
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule (.*) legacy/public/$1 [L]
+  # Todo request externo va a public/ (Laravel), exista o no como archivo en
+  # la raiz. Con Laravel instalado aqui, la raiz contiene .env, composer.json,
+  # config/, routes/, database/, storage/, vendor/, legacy/, backups/, etc.:
+  # nada de eso debe ser accesible por URL. Los assets reales viven en public/.
+  RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
-# ===================================================
-# CONTROL DE CACHÉ PARA ARCHIVOS ESTÁTICOS
-# ===================================================
 <IfModule mod_headers.c>
   <FilesMatch "\.(css|js)$">
       Header set Cache-Control "no-cache, no-store, must-revalidate"

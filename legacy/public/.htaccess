@@ -1,8 +1,14 @@
 <IfModule mod_rewrite.c>
   Options -Multiviews
   RewriteEngine On
-  # NOTA (migracion Laravel, Fase 1): ruta ajustada temporalmente porque
-  # este public/ ahora vive bajo legacy/. Ver .htaccess raiz.
+
+  # Migracion Laravel (Fase 1): este public/ ya no se sirve directo. Solo se
+  # llega aqui via la reescritura interna /__legacy (loopback, ver .htaccess
+  # raiz y LegacyBridgeController). Un acceso externo directo a
+  # /venta-pasajes/legacy/... se rechaza para que nadie se salte Laravel.
+  RewriteCond %{ENV:REDIRECT_STATUS} ^$
+  RewriteRule ^ - [F]
+
   RewriteBase /venta-pasajes/legacy/public
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteCond %{REQUEST_FILENAME} !-f

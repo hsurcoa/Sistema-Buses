@@ -173,7 +173,7 @@ $logoEmpresa = !empty($config_sidebar['empresa_logo']) ? URLROOT . '/' . $config
                         <li class="nav-item">
                             <a href="<?php echo URLROOT; ?>/admin/rutas_paradas" class="nav-link">
                                 <i class="nav-icon bi bi-map"></i>
-                                <p>Rutas y Paradas</p>
+                                <p>Rutas y tarifas</p>
                             </a>
                         </li>
                         <li class="nav-item">

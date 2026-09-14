@@ -259,9 +259,17 @@ class Ventas extends Controller
                 $viaje->nombre_tipo_bus = 'Bus Estándar';
             }
 
-            // 3. Obtener Asientos Ocupados Real (Desde DB)
-            // Se consulta por viaje_id para evitar conflictos con otros viajes del mismo bus
-            $viaje->asientos_ocupados = $this->rutaModel->obtenerAsientosOcupados($viaje->id);
+            // 3. Asientos ocupados para el tramo pedido (?subida=&bajada=; vacio = ruta completa)
+            $subida = (int) ($_GET['subida'] ?? 0);
+            $bajada = (int) ($_GET['bajada'] ?? 0);
+            $viaje->asientos_ocupados = $this->rutaModel->obtenerAsientosOcupados($viaje->id, $subida, $bajada);
+
+            // Puntos de la ruta y tarifas por tramo para la venta
+            require_once APPROOT . '/models/TramoModel.php';
+            $tramos = new TramoModel();
+            $viaje->puntos = $tramos->puntos($viaje->ruta_id);
+            $viaje->tarifas = $tramos->matriz($viaje->ruta_id);
+            $viaje->tramo = ['subida' => $subida, 'bajada' => $bajada];
 
             // 4. Obtener Lista de Rutas Activas para el Select
             $viaje->lista_rutas = $this->rutaModel->listarRutasActivas();

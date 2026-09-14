@@ -122,7 +122,8 @@ class ControladorTransacciones extends Controller
             'precio' => $datos['precio'] ?? 0,
             'estado' => $estado,
             'usuario_id' => SessionManager::getInstance()->getUserId(),
-            'parada_id' => $datos['parada_id'] ?? null, // ✅ Nuevo campo para parada intermedia
+            'parada_id' => $datos['parada_id'] ?? null, // donde baja (vacio = destino final)
+            'parada_subida_id' => $datos['parada_subida_id'] ?? null, // donde sube (vacio = origen)
             'metodo_pago' => $esQr ? 'QR' : 'EFECTIVO',
             'minutos_reserva' => $minutosQr,
         ];

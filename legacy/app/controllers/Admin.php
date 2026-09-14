@@ -970,13 +970,46 @@ class Admin extends Controller
      * =====================================================
      */
 
+    /** Rutas y tarifas: rutas, paradas intermedias y tarifas por tramo. */
     public function rutas_paradas()
     {
-        $rutas = $this->rutaModel->listarRutas(100, 0);
+        require_once '../app/models/TramoModel.php';
+        $tramos = new TramoModel();
+
+        $db = new Database();
+        $db->query("SELECT r.*,
+                           (SELECT COUNT(*) FROM rutas_paradas p WHERE p.ruta_id = r.id AND p.estado = 1) AS paradas,
+                           (SELECT COUNT(*) FROM viajes v WHERE v.ruta_id = r.id) AS viajes,
+                           (SELECT COUNT(*) FROM tarifas_tramo t WHERE t.ruta_id = r.id AND t.precio_sugerido = 1) AS tarifas_sugeridas
+                    FROM rutas r
+                    ORDER BY r.estado DESC, r.origen, r.destino");
+        $rutas = $db->resultSet();
+
+        $rutaId = (int) ($_GET['ruta'] ?? ($rutas[0]->id ?? 0));
+        $ruta = null;
+        foreach ($rutas as $r) {
+            if ((int) $r->id === $rutaId) {
+                $ruta = $r;
+            }
+        }
+
+        $paradasEncomienda = [];
+        if ($ruta) {
+            $db->query('SELECT id, precio_base_encomienda FROM rutas_paradas WHERE ruta_id = :r AND estado = 1');
+            $db->bind(':r', $ruta->id);
+            foreach ($db->resultSet() as $p) {
+                $paradasEncomienda[(int) $p->id] = (float) $p->precio_base_encomienda;
+            }
+        }
 
         $data = [
-            'title' => 'Rutas y Paradas',
-            'rutas' => $rutas
+            'title' => 'Rutas y tarifas',
+            'rutas' => $rutas,
+            'ruta' => $ruta,
+            'puntos' => $ruta ? $tramos->puntos($ruta->id) : [],
+            'tarifas' => $ruta ? $tramos->matriz($ruta->id) : [],
+            'precio_encomienda' => $paradasEncomienda,
+            'es_admin' => $this->esAdministrador(),
         ];
 
         $this->view('layouts/header', $data);
@@ -985,8 +1018,119 @@ class Admin extends Controller
         $this->view('layouts/footer', $data);
     }
 
+    /** Guarda las paradas intermedias de una ruta en el orden recibido (AJAX JSON). */
+    public function guardar_paradas()
+    {
+        $entrada = $this->entradaJsonRutas();
+        $rutaId = (int) ($entrada['ruta_id'] ?? 0);
+
+        $paradas = [];
+        $nombres = [];
+        foreach ($entrada['paradas'] ?? [] as $p) {
+            $nombre = trim(preg_replace('/\s+/', ' ', (string) ($p['nombre'] ?? '')));
+            if ($nombre === '') {
+                $this->responderRutas(false, 'Todas las paradas deben tener nombre.');
+            }
+            $clave = mb_strtolower($nombre);
+            if (isset($nombres[$clave])) {
+                $this->responderRutas(false, 'La parada "' . $nombre . '" está repetida.');
+            }
+            $nombres[$clave] = true;
+            $paradas[] = [
+                'id' => (int) ($p['id'] ?? 0),
+                'nombre' => mb_substr($nombre, 0, 100),
+                'precio_encomienda' => max(0, round((float) ($p['precio_encomienda'] ?? 0), 2)),
+            ];
+        }
+
+        require_once '../app/models/TramoModel.php';
+        try {
+            (new TramoModel())->guardarParadas($rutaId, $paradas);
+        } catch (Exception $e) {
+            error_log('Admin::guardar_paradas: ' . $e->getMessage());
+            $this->responderRutas(false, 'No se pudieron guardar las paradas.');
+        }
+        $this->responderRutas(true, 'Paradas guardadas. Revise las tarifas de los tramos nuevos.');
+    }
+
+    /** Guarda la matriz de tarifas por tramo de una ruta (AJAX JSON). */
+    public function guardar_tarifas()
+    {
+        $entrada = $this->entradaJsonRutas();
+        $rutaId = (int) ($entrada['ruta_id'] ?? 0);
+
+        require_once '../app/models/TramoModel.php';
+        $tramos = new TramoModel();
+        $puntos = $tramos->puntos($rutaId);
+        if (!$puntos) {
+            $this->responderRutas(false, 'La ruta no existe.');
+        }
+
+        // Pares validos: de cada punto a cualquier punto posterior
+        $validos = [];
+        foreach ($puntos as $i => $desde) {
+            if ($desde['tipo'] === 'destino') {
+                continue;
+            }
+            foreach (array_slice($puntos, $i + 1) as $hasta) {
+                $validos[$desde['id'] . '-' . ($hasta['tipo'] === 'destino' ? 0 : $hasta['id'])] = true;
+            }
+        }
+
+        $tarifas = [];
+        foreach ($entrada['tarifas'] ?? [] as $t) {
+            $clave = (int) ($t['desde'] ?? -1) . '-' . (int) ($t['hasta'] ?? -1);
+            $precio = round((float) ($t['precio'] ?? 0), 2);
+            if (!isset($validos[$clave])) {
+                continue;
+            }
+            if ($precio <= 0) {
+                $this->responderRutas(false, 'Todas las tarifas deben ser mayores a 0.');
+            }
+            $tarifas[] = ['desde' => (int) $t['desde'], 'hasta' => (int) $t['hasta'], 'precio' => $precio];
+        }
+        if (count($tarifas) !== count($validos)) {
+            $this->responderRutas(false, 'Complete la tarifa de todos los tramos (' . count($validos) . ').');
+        }
+
+        try {
+            $tramos->guardarTarifas($rutaId, $tarifas);
+        } catch (Exception $e) {
+            error_log('Admin::guardar_tarifas: ' . $e->getMessage());
+            $this->responderRutas(false, 'No se pudieron guardar las tarifas.');
+        }
+        $this->responderRutas(true, 'Tarifas guardadas.');
+    }
+
+    private function entradaJsonRutas()
+    {
+        if (ob_get_level() > 0) ob_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->responderRutas(false, 'Método no permitido.');
+        }
+        $entrada = json_decode(file_get_contents('php://input'), true) ?: [];
+        if (!$this->esAdministrador()) {
+            $this->responderRutas(false, 'Solo un Administrador puede modificar rutas y tarifas.');
+        }
+        if (!$this->sessionManager->verifyCsrfToken($entrada['csrf_token'] ?? '')) {
+            $this->responderRutas(false, 'La sesión expiró. Recargue la página.');
+        }
+        return $entrada;
+    }
+
+    private function responderRutas($ok, $mensaje)
+    {
+        echo json_encode(['status' => $ok ? 'success' : 'error', 'message' => $mensaje], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     public function guardar_ruta()
     {
+        if (!$this->esAdministrador()) {
+            header('Location: ' . URLROOT . '/admin/rutas_paradas');
+            exit;
+        }
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Obtener datos del formulario
             $id = $_POST['id'] ?? '';

@@ -326,7 +326,7 @@ class BusRenderer {
         el.className = `seat seat--${status}`;
 
         const labels = { libre: 'Libre', reservado: 'Reservado', vendido: 'Vendido' };
-        el.title = `Asiento ${num} · ${labels[status]}`;
+        el.title = `Asiento ${num} · ${labels[status]}` + (occupiedInfo && occupiedInfo.tramo ? ` · ${occupiedInfo.tramo}` : '');
         el.setAttribute('aria-label', `Asiento ${num}, ${labels[status]}`);
         el.innerHTML = `<span class="seat-num">${num}</span>`;
 

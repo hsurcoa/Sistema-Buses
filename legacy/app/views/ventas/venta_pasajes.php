@@ -57,15 +57,27 @@
             margin-bottom: 12px;
         }
 
-        .fare-row {
+        .tramo-row {
             display: grid;
-            /* el destino ("Destino Final: X (25.00 Bs)") necesita mas ancho que el precio */
-            grid-template-columns: minmax(0, 1fr) 120px;
+            grid-template-columns: 1fr 1fr;
             gap: 0 10px;
         }
 
+        .fare-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 120px;
+            gap: 0 10px;
+            align-items: end;
+        }
+
+        .tramo-info {
+            font-size: 0.8rem;
+            color: var(--color-text-muted, #6c757d);
+            align-self: center;
+        }
+
         @media (max-width: 575.98px) {
-            .fare-row { grid-template-columns: 1fr; }
+            .fare-row, .tramo-row { grid-template-columns: 1fr; }
         }
 
         .page-title {
@@ -587,14 +599,19 @@
                                         <?php endif; ?>
                                     </select>
 
-                                    <div class="fare-row">
-                                    <!-- Destino (paradas intermedias) -->
-                                    <div class="form-group-custom" id="container_paradas" style="display:none;">
-                                        <label><i class="fas fa-map-signs me-1"></i> Destino / Parada</label>
-                                        <select class="form-control-custom font-weight-bold text-primary" id="select_parada">
-                                            <option value="">Destino Final (Completo)</option>
-                                        </select>
+                                    <!-- Tramo: donde sube y donde baja (precio y asientos se calculan para el tramo) -->
+                                    <div class="tramo-row" id="container_paradas">
+                                        <div class="form-group-custom">
+                                            <label for="select_subida"><i class="fas fa-sign-in-alt me-1"></i> Sube en</label>
+                                            <select class="form-control-custom" id="select_subida"></select>
+                                        </div>
+                                        <div class="form-group-custom">
+                                            <label for="select_parada"><i class="fas fa-map-marker-alt me-1"></i> Baja en</label>
+                                            <select class="form-control-custom font-weight-bold text-primary" id="select_parada"></select>
+                                        </div>
                                     </div>
+                                    <div class="fare-row">
+                                    <div class="form-group-custom tramo-info" id="tramoInfo" aria-live="polite"></div>
 
                                     <!-- Precio -->
                                     <div class="form-group-custom">
@@ -1398,12 +1415,23 @@
             });
 
             // --- FUNCIÓN DE CARGA DE DIAGRAMA ---
+            // Tramo elegido (se conserva al recargar el mapa del mismo viaje)
+            let tramoViajeId = null;
+
+            function tramoActual() {
+                return {
+                    subida: parseInt($('#select_subida').val() || '0', 10),
+                    bajada: parseInt($('#select_parada').val() || '0', 10)
+                };
+            }
+
             function cargarDiagramaBus(id) {
+                const mismoViaje = String(tramoViajeId) === String(id);
                 currentViajeId = id;
                 $('#contenedor-bus').html('<div class="spinner-border text-primary m-auto mt-5"></div>');
 
-                // Anti-cache param
-                $.getJSON(`${URLROOT}/ventas/obtener_ruta_viaje/${id}?_=${new Date().getTime()}`, function(response) {
+                const t = mismoViaje ? tramoActual() : { subida: 0, bajada: 0 };
+                $.getJSON(`${URLROOT}/ventas/obtener_ruta_viaje/${id}?subida=${t.subida}&bajada=${t.bajada}&_=${new Date().getTime()}`, function(response) {
                     const data = response.data || response;
                     console.log("📊 Response obtener_ruta_viaje:", response);
                     console.log("🚌 Data para renderizar:", data);
@@ -1420,45 +1448,78 @@
                     // ✅ NUEVO: Actualizar panel "Detalle de Ruta y Bus"
                     actualizarPanelDetalleBus(data, id);
 
-                    // ✅ NUEVO: Cargar Paradas Intermedias (Venta Dinámica)
-                    const $selectParada = $('#select_parada');
-                    const $containerParadas = $('#container_paradas');
-
-                    // Limpiar select (mantener opción por defecto con precio completo)
-                    $selectParada.empty();
-
-                    // Precio Base (Destino Final)
-                    const precioBase = parseFloat(data.precio_base || 0).toFixed(2);
-                    $selectParada.append(`<option value="" data-precio="${precioBase}">Destino Final: ${data.destino} (${precioBase} Bs)</option>`);
-
-                    $('#precioBase').val(precioBase);
-                    $('#inputPrecio').val(precioBase); // Reset a precio base
-
-                    if (data.paradas && data.paradas.length > 0) {
-                        data.paradas.forEach(p => {
-                            const precioParada = parseFloat(p.precio_pasaje).toFixed(2);
-                            $selectParada.append(`<option value="${p.id}" data-precio="${precioParada}">${p.nombre_parada} (${precioParada} Bs)</option>`);
-                        });
-                        $containerParadas.fadeIn();
+                    // Tramo: poblar "Sube en" / "Baja en" solo al cambiar de viaje
+                    if (!mismoViaje) {
+                        poblarTramos(data);
+                        tramoViajeId = id;
                     } else {
-                        $containerParadas.hide();
+                        datosTramo = { puntos: data.puntos || [], tarifas: data.tarifas || {}, precioBase: parseFloat(data.precio_base || 0) };
                     }
-
-                    // Resetear evento change anterior para evitar duplicados
-                    $selectParada.off('change').on('change', function() {
-                        const selectedOpt = $(this).find(':selected');
-                        const precioNuevo = selectedOpt.data('precio');
-                        if (precioNuevo) {
-                            $('#inputPrecio').val(precioNuevo);
-                            // Efecto visual
-                            $('#inputPrecio').addClass('bg-warning').delay(200).queue(function(next) {
-                                $(this).removeClass('bg-warning');
-                                next();
-                            });
-                        }
-                    });
+                    actualizarPrecioTramo();
 
                 }).fail(() => $('#contenedor-bus').html('<div class="alert alert-danger">Error de conexión</div>'));
+            }
+
+            // ---------------- Venta por tramo ----------------
+            let datosTramo = { puntos: [], tarifas: {}, precioBase: 0 };
+
+            function poblarTramos(data) {
+                datosTramo = { puntos: data.puntos || [], tarifas: data.tarifas || {}, precioBase: parseFloat(data.precio_base || 0) };
+                const $sube = $('#select_subida').empty();
+                const $baja = $('#select_parada').empty();
+                const puntos = datosTramo.puntos;
+
+                puntos.forEach((p, i) => {
+                    if (p.tipo !== 'destino') {
+                        $sube.append(`<option value="${p.tipo === 'origen' ? '' : p.id}" data-orden="${p.orden}">${escapeHtmlQr(p.nombre)}${p.tipo === 'origen' ? ' (origen)' : ''}</option>`);
+                    }
+                    if (p.tipo !== 'origen') {
+                        $baja.append(`<option value="${p.tipo === 'destino' ? '' : p.id}" data-orden="${p.orden}">${escapeHtmlQr(p.nombre)}${p.tipo === 'destino' ? ' (destino final)' : ''}</option>`);
+                    }
+                });
+                $baja.val('');
+                limitarBajadas();
+
+                $sube.off('change').on('change', () => { limitarBajadas(); cambiarTramo(); });
+                $baja.off('change').on('change', cambiarTramo);
+            }
+
+            // Solo se puede bajar despues de donde se sube
+            function limitarBajadas() {
+                const ordenSube = parseInt($('#select_subida option:selected').data('orden') || 0, 10);
+                let seleccionValida = false;
+                $('#select_parada option').each(function() {
+                    const valida = parseInt($(this).data('orden'), 10) > ordenSube;
+                    $(this).prop('disabled', !valida);
+                    if (valida && $(this).is(':selected')) seleccionValida = true;
+                });
+                if (!seleccionValida) $('#select_parada').val('');
+            }
+
+            function actualizarPrecioTramo() {
+                const t = tramoActual();
+                const tarifa = datosTramo.tarifas[`${t.subida}-${t.bajada}`];
+                let precio = tarifa ? tarifa.precio : (t.subida === 0 && t.bajada === 0 ? datosTramo.precioBase : 0);
+                precio = parseFloat(precio || 0).toFixed(2);
+                $('#inputPrecio').val(precio);
+                $('#precioBase').val(precio);
+
+                const nombre = v => (datosTramo.puntos.find(p => (v === 'o' ? p.tipo === 'origen' : v === 'd' ? p.tipo === 'destino' : p.id === v)) || {}).nombre || '';
+                const sube = t.subida ? nombre(t.subida) : nombre('o');
+                const baja = t.bajada ? nombre(t.bajada) : nombre('d');
+                $('#tramoInfo').html(parseFloat(precio) > 0
+                    ? `Tramo <strong>${escapeHtmlQr(sube)} → ${escapeHtmlQr(baja)}</strong>`
+                    : `<span class="text-danger">El tramo ${escapeHtmlQr(sube)} → ${escapeHtmlQr(baja)} no tiene tarifa.</span>`);
+                $('#btnCobrar, #btnReservar, #btnCobrarQr').prop('disabled', !(parseFloat(precio) > 0));
+            }
+
+            function cambiarTramo() {
+                actualizarPrecioTramo();
+                // El asiento elegido puede no estar libre en el nuevo tramo: se vuelve a elegir
+                asientoSeleccionado = null;
+                $('#inputAsiento').val('');
+                $('#displayAsiento').text('--');
+                if (currentViajeId) cargarDiagramaBus(currentViajeId);
             }
 
             // ✅ NUEVA FUNCIÓN: Actualizar panel "Detalle de Ruta y Bus"
@@ -2034,7 +2095,7 @@
                     title: tipo === 3 ? '¿Cobrar con QR?' : '¿Confirmar ' + (tipo === 1 ? 'Venta' : 'Reserva') + '?',
                     html: `
                         <div style="text-align: left; padding: 10px;">
-                            <p><strong>🚌 Ruta:</strong> ${rutaActual}</p>
+                            <p><strong>🚌 Tramo:</strong> ${escapeHtmlQr($('#select_subida option:selected').text().replace(' (origen)', ''))} → ${escapeHtmlQr($('#select_parada option:selected').text().replace(' (destino final)', ''))}</p>
                             <p><strong>💺 Asiento:</strong> ${asientoSeleccionado}</p>
                             <p><strong>👤 Pasajero:</strong> ${nom} ${ape}</p>
                             <p><strong>📄 Documento:</strong> ${doc}</p>
@@ -2224,7 +2285,8 @@
                     celular: $('#inputCelular').val(),
                     precio: $('#inputPrecio').val(),
                     tipo: accionTipo,
-                    parada_id: $('#select_parada').val() // ✅ Destino intermedio
+                    parada_id: $('#select_parada').val(), // donde baja (vacio = destino final)
+                    parada_subida_id: $('#select_subida').val() // donde sube (vacio = origen)
                 };
 
                 // ✅ Log para debugging
@@ -2556,7 +2618,15 @@
             }
 
             function limpiarFormulario(full) {
+                // El reset del formulario no debe perder el tramo elegido (sube / baja)
+                const subida = $('#select_subida').val();
+                const bajada = $('#select_parada').val();
                 $('#formVenta')[0].reset();
+                $('#select_subida').val(subida);
+                $('#select_parada').val(bajada);
+                if (typeof actualizarPrecioTramo === 'function' && datosTramo.puntos.length) {
+                    actualizarPrecioTramo();
+                }
                 $('#inputPrecio').val($('#precioBase').val());
                 $('#btnReservar').show();
                 $('#btnCancelar').hide();

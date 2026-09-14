@@ -84,12 +84,13 @@ class DashboardModel
     public function rutasMasVendidas($desde, $hasta, $sucursal, $limite = 6)
     {
         [$cond, $p] = $this->condSucursal('b.sucursal_id', $sucursal);
-        $this->db->query("SELECT CONCAT(r.origen, ' → ', COALESCE(rp.nombre_parada, r.destino)) AS tramo,
+        $this->db->query("SELECT CONCAT(COALESCE(rps.nombre_parada, r.origen), ' → ', COALESCE(rp.nombre_parada, r.destino)) AS tramo,
                                  COUNT(*) AS boletos, SUM(b.precio_final) AS ingresos
                           FROM boletos b
                           JOIN viajes v ON v.id = b.viaje_id
                           JOIN rutas r ON r.id = v.ruta_id
                           LEFT JOIN rutas_paradas rp ON rp.id = b.parada_id
+                          LEFT JOIN rutas_paradas rps ON rps.id = b.parada_subida_id
                           WHERE b.estado = 'vendido'
                             AND DATE(COALESCE(b.fecha_pago, b.fecha_reserva)) BETWEEN :desde AND :hasta{$cond}
                           GROUP BY tramo ORDER BY boletos DESC LIMIT " . (int) $limite);

@@ -28,28 +28,23 @@ class RutaModel
      * @param int $viajeId
      * @return array Array simple de números de asiento [1, 5, 20]
      */
-    public function obtenerAsientosOcupados($viajeId)
+    public function obtenerAsientosOcupados($viajeId, $subidaId = 0, $bajadaId = 0)
     {
         try {
             $this->liberarCobrosQrVencidos($viajeId);
 
-            // Consultar asientos vendidos o reservados desde la tabla CORRECTA 'boletos'
-            $this->db->query("SELECT id, numero_asiento, estado FROM boletos WHERE viaje_id = :viaje_id AND estado IN ('vendido', 'reservado')");
-            $this->db->bind(':viaje_id', $viajeId);
+            // Ocupacion por tramo: un asiento vendido El Alto -> Huarina queda libre
+            // para Achacachi -> Copacabana. Sin tramo = ruta completa.
+            require_once APPROOT . '/models/TramoModel.php';
+            $tramos = new TramoModel();
+            $this->db->query("SELECT ruta_id FROM viajes WHERE id = :id");
+            $this->db->bind(':id', $viajeId);
+            $rutaId = $this->db->single()->ruta_id ?? 0;
 
-            $resultados = $this->db->resultSet();
+            $ordenSube = $tramos->orden($rutaId, $subidaId, false) ?? 0;
+            $ordenBaja = $tramos->orden($rutaId, $bajadaId, true) ?? TramoModel::DESTINO;
 
-            // Transformar a array de objetos para manejar estados
-            $ocupados = [];
-            foreach ($resultados as $fila) {
-                $ocupados[] = [
-                    'id' => $fila->id,
-                    'numero' => (int) $fila->numero_asiento,
-                    'estado' => $fila->estado
-                ];
-            }
-
-            return $ocupados;
+            return $tramos->asientosOcupados($viajeId, $ordenSube, $ordenBaja);
         } catch (Exception $e) {
             error_log("Error obtenerAsientosOcupados: " . $e->getMessage());
             return [];
@@ -766,13 +761,52 @@ class RutaModel
                 throw new Exception("El asiento {$datos['asiento']} no existe en este bus (asientos 1 a {$capacidad}).");
             }
 
-            // 2. Verificar Asiento Disponible (Bloqueo para concurrencia)
+            // 2. Verificar asiento disponible EN EL TRAMO.
+            //    Se bloquea la fila del viaje: las ventas del mismo viaje se atienden de a una
+            //    (antes dos ventas simultaneas del mismo asiento libre podian pasar ambas).
             $this->liberarCobrosQrVencidos($datos['viaje_id']);
-            $this->db->query("SELECT id FROM boletos WHERE viaje_id = :vid AND numero_asiento = :asiento AND estado IN ('vendido','reservado') FOR UPDATE");
+            $this->db->query("SELECT id, ruta_id, precio_base FROM viajes WHERE id = :vid FOR UPDATE");
+            $this->db->bind(':vid', $datos['viaje_id']);
+            $viajeVenta = $this->db->single();
+
+            $subidaId = (int) ($datos['parada_subida_id'] ?? 0);
+            $bajadaId = (int) ($datos['parada_id'] ?? 0);
+            require_once APPROOT . '/models/TramoModel.php';
+            $tramos = new TramoModel();
+            $ordenSube = $tramos->orden($viajeVenta->ruta_id, $subidaId, false);
+            $ordenBaja = $tramos->orden($viajeVenta->ruta_id, $bajadaId, true);
+            if ($ordenSube === null || $ordenBaja === null) {
+                throw new Exception("La parada de subida o de bajada no pertenece a la ruta de este viaje.");
+            }
+            if ($ordenSube >= $ordenBaja) {
+                throw new Exception("La parada de bajada debe estar después de la de subida.");
+            }
+
+            $this->db->query("SELECT b.id,
+                                     COALESCE(ps.orden_index, 0) AS orden_sube,
+                                     COALESCE(pb.orden_index, " . TramoModel::DESTINO . ") AS orden_baja
+                              FROM boletos b
+                              LEFT JOIN rutas_paradas ps ON ps.id = b.parada_subida_id
+                              LEFT JOIN rutas_paradas pb ON pb.id = b.parada_id
+                              WHERE b.viaje_id = :vid AND b.numero_asiento = :asiento AND b.estado IN ('vendido','reservado')
+                              FOR UPDATE");
             $this->db->bind(':vid', $datos['viaje_id']);
             $this->db->bind(':asiento', $datos['asiento']);
-            if ($this->db->single()) {
-                throw new Exception("El asiento " . $datos['asiento'] . " ya está ocupado en el viaje #" . $datos['viaje_id'] . ". Seleccione otro.");
+            foreach ($this->db->resultSet() as $otro) {
+                if ((int) $otro->orden_sube < $ordenBaja && $ordenSube < (int) $otro->orden_baja) {
+                    throw new Exception("El asiento " . $datos['asiento'] . " ya está ocupado en ese tramo del viaje #" . $datos['viaje_id'] . ". Seleccione otro.");
+                }
+            }
+
+            // Precio del tramo segun tarifa (el navegador no decide el precio)
+            $tarifa = $tramos->tarifa($viajeVenta->ruta_id, $subidaId, $bajadaId);
+            if ($tarifa !== null) {
+                $datos['precio'] = $tarifa;
+            } elseif ($subidaId === 0 && $bajadaId === 0) {
+                $datos['precio'] = $viajeVenta->precio_base;
+            }
+            if ((float) $datos['precio'] <= 0) {
+                throw new Exception("El tramo elegido no tiene tarifa. Configúrela en Rutas y tarifas.");
             }
 
             // 3. Código: correlativo de la sucursal (EAL-000123). El aleatorio anterior
@@ -781,14 +815,14 @@ class RutaModel
             $codigo = $codigo ?: $this->generarCodigoBoleto();
 
             // 4. Insertar Boleto
-            $paradaId = !empty($datos['parada_id']) ? $datos['parada_id'] : null;
+            $paradaId = $bajadaId ?: null;
 
             $metodoPago = ($datos['metodo_pago'] ?? 'EFECTIVO') === 'QR' ? 'QR' : 'EFECTIVO';
             // Cobro QR pendiente: el asiento queda reservado solo unos minutos
             $minutosQr = !empty($datos['minutos_reserva']) ? max(1, (int) $datos['minutos_reserva']) : null;
 
-            $sql = "INSERT INTO boletos (viaje_id, cliente_id, usuario_vendedor_id, sesion_caja_id, sucursal_id, numero_asiento, precio_final, metodo_pago, fecha_pago, estado, fecha_reserva, fecha_expiracion_reserva, codigo_boleto, parada_id)
-                    VALUES (:vid, :cid, :uid, :sesion, :sucursal, :asiento, :precio, :metodo, "  . ($datos['estado'] == 'vendido' ? 'NOW()' : 'NULL') . ", :estado, NOW(), " . ($minutosQr ? 'DATE_ADD(NOW(), INTERVAL ' . $minutosQr . ' MINUTE)' : 'NULL') . ", :codigo, :parada_id)";
+            $sql = "INSERT INTO boletos (viaje_id, cliente_id, usuario_vendedor_id, sesion_caja_id, sucursal_id, parada_subida_id, numero_asiento, precio_final, metodo_pago, fecha_pago, estado, fecha_reserva, fecha_expiracion_reserva, codigo_boleto, parada_id)
+                    VALUES (:vid, :cid, :uid, :sesion, :sucursal, :subida, :asiento, :precio, :metodo, "  . ($datos['estado'] == 'vendido' ? 'NOW()' : 'NULL') . ", :estado, NOW(), " . ($minutosQr ? 'DATE_ADD(NOW(), INTERVAL ' . $minutosQr . ' MINUTE)' : 'NULL') . ", :codigo, :parada_id)";
 
             $this->db->query($sql);
             $this->db->bind(':vid', $datos['viaje_id']);
@@ -796,6 +830,7 @@ class RutaModel
             $this->db->bind(':uid', $datos['usuario_id']);
             $this->db->bind(':sesion', $sesionId);
             $this->db->bind(':sucursal', $sucursalVenta);
+            $this->db->bind(':subida', $subidaId ?: null);
             $this->db->bind(':asiento', $datos['asiento']);
             $this->db->bind(':precio', $datos['precio']);
             $this->db->bind(':metodo', $metodoPago);
@@ -891,7 +926,7 @@ class RutaModel
                     v.hora_salida,
                     
                     -- Nombres reales de Ciudades (Ruta)
-                r.origen as ciudad_origen,
+                COALESCE(rps.nombre_parada, r.origen) as ciudad_origen,
                 COALESCE(rp.nombre_parada, r.destino) as ciudad_destino,
                 
                 -- Nombres de Terminales (Opcional, pero útil)
@@ -912,6 +947,7 @@ class RutaModel
             INNER JOIN viajes v ON b.viaje_id = v.id
             INNER JOIN rutas r ON v.ruta_id = r.id
             LEFT JOIN rutas_paradas rp ON b.parada_id = rp.id
+            LEFT JOIN rutas_paradas rps ON b.parada_subida_id = rps.id
             LEFT JOIN terminales ter_orig ON v.terminal_origen_id = ter_orig.id
             LEFT JOIN vehiculos bus ON v.bus_id = bus.id
             LEFT JOIN terminales suc ON suc.id = b.sucursal_id
@@ -947,13 +983,13 @@ class RutaModel
                         v.fecha_salida,
                         v.hora_salida,
                         
-                        -- Corrección: Obtener nombres desde tabla terminales o paradas
-                        t_origen.nombre_sede AS ciudad_origen,
-                        COALESCE(rp.nombre_parada, t_destino.nombre_sede, r.destino) AS ciudad_destino,
-                        
+                        -- Tramo del pasajero: donde sube y donde baja
+                        COALESCE(rps.nombre_parada, r.origen) AS ciudad_origen,
+                        COALESCE(rp.nombre_parada, r.destino) AS ciudad_destino,
+
                         -- Alias de compatibilidad para el controlador
-                        t_origen.nombre_sede AS origen,
-                        COALESCE(rp.nombre_parada, t_destino.nombre_sede, r.destino) AS destino,
+                        COALESCE(rps.nombre_parada, r.origen) AS origen,
+                        COALESCE(rp.nombre_parada, r.destino) AS destino,
 
                         COALESCE(bu.placa, 'SIN ASIGNAR') AS bus_placa
                       FROM boletos b
@@ -961,9 +997,8 @@ class RutaModel
                       INNER JOIN viajes v ON b.viaje_id = v.id
                       INNER JOIN rutas r ON v.ruta_id = r.id
                       LEFT JOIN rutas_paradas rp ON b.parada_id = rp.id
-                      LEFT JOIN terminales t_origen ON v.terminal_origen_id = t_origen.id
-                      LEFT JOIN terminales t_destino ON v.terminal_destino_id = t_destino.id
-                      LEFT JOIN buses bu ON v.bus_id = bu.id
+                      LEFT JOIN rutas_paradas rps ON b.parada_subida_id = rps.id
+                      LEFT JOIN vehiculos bu ON v.bus_id = bu.id
                       WHERE b.viaje_id = :viaje_id
                         AND b.estado IN ('vendido', 'reservado')
                       ORDER BY CAST(b.numero_asiento AS UNSIGNED) ASC";
@@ -1157,11 +1192,12 @@ class RutaModel
     {
         $this->db->query("SELECT b.id, b.estado, b.metodo_pago, b.precio_final, b.numero_asiento, b.codigo_boleto, b.sucursal_id,
                                  GREATEST(TIMESTAMPDIFF(SECOND, NOW(), b.fecha_expiracion_reserva), 0) AS segundos_restantes,
-                                 r.origen, COALESCE(rp.nombre_parada, r.destino) AS destino, v.fecha_salida
+                                 COALESCE(rps.nombre_parada, r.origen) AS origen, COALESCE(rp.nombre_parada, r.destino) AS destino, v.fecha_salida
                           FROM boletos b
                           JOIN viajes v ON v.id = b.viaje_id
                           JOIN rutas r ON r.id = v.ruta_id
                           LEFT JOIN rutas_paradas rp ON rp.id = b.parada_id
+                          LEFT JOIN rutas_paradas rps ON rps.id = b.parada_subida_id
                           WHERE b.id = :id");
         $this->db->bind(':id', $boletoId);
         return $this->db->single() ?: null;

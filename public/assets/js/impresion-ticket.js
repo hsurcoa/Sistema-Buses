@@ -1,6 +1,6 @@
 /**
  * SISTEMA DE IMPRESIÓN DE TICKETS TÉRMICOS 80MM
- * BusDriver Transporte - Sistema POS
+ * Ticket termico de boleto de viaje
  * 
  * Función principal para generar e imprimir tickets térmicos
  * optimizados para papel de 80mm (aprox. 300-320px de ancho)
@@ -81,6 +81,11 @@ function formatearHora(hora) {
  * @param {Object} datosBoleto - Objeto con la información del boleto
  * @param {Window} [ventanaExistente=null] - (Opcional) Referencia a una ventana ya abierta para evitar bloqueos
  */
+// Escapa texto para insertarlo en el HTML del ticket
+function escaparTicket(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function imprimirTicket(datosBoleto, ventanaExistente = null) {
     // Validar que existan los datos
     if (!datosBoleto) {
@@ -116,6 +121,11 @@ function imprimirTicket(datosBoleto, ventanaExistente = null) {
  * @returns {string} - HTML del ticket
  */
 function generarHTMLTicket(datos) {
+    const empresaTicket = {
+        nombre: datos.empresaNombre || (window.EMPRESA_TICKET && window.EMPRESA_TICKET.nombre) || 'Boleto de viaje',
+        nit: datos.empresaNit || (window.EMPRESA_TICKET && window.EMPRESA_TICKET.nit) || ''
+    };
+
     return `
 <!DOCTYPE html>
 <html lang="es">
@@ -371,15 +381,16 @@ function generarHTMLTicket(datos) {
                 <circle cx="135" cy="65" r="3" fill="#fff"/>
             </svg>
         </div>
-        <div class="empresa-nombre">BUSDRIVER TRANSPORTE</div>
+        <div class="empresa-nombre">${escaparTicket(empresaTicket.nombre)}</div>
         <div class="empresa-info">
-            ${datos.empresaDireccion || 'Av. El Alto N° 777'}<br>
-            Tel: ${datos.empresaTelefono || '967885780'}<br>
-            Email: ${datos.empresaEmail || 'atencioncliente@busdriver.com'}<br>
-            RUC: ${datos.empresaRuc || '20201563254'}
+            ${[
+                empresaTicket.nit ? 'NIT: ' + escaparTicket(empresaTicket.nit) : '',
+                datos.empresaDireccion ? escaparTicket(datos.empresaDireccion) : '',
+                datos.empresaTelefono ? 'Tel: ' + escaparTicket(datos.empresaTelefono) : '',
+            ].filter(Boolean).join('<br>')}
         </div>
         <div class="numero-boleto-header">BOLETO DE VIAJE</div>
-        <div class="numero-boleto-grande">${datos.numeroBoleto || '957 - 151405'}</div>
+        <div class="numero-boleto-grande">${escaparTicket(datos.numeroBoleto || '')}</div>
     </div>
 
     <div class="separador-solido"></div>
@@ -396,7 +407,7 @@ function generarHTMLTicket(datos) {
         </div>
         <div class="campo-viaje">
             <div class="campo-label">Placa Bus</div>
-            <div class="campo-valor">${datos.placaBus || 'RG-2965'}</div>
+            <div class="campo-valor">${escaparTicket(datos.placaBus || '—')}</div>
         </div>
     </div>
 

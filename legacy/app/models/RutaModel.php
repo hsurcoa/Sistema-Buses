@@ -730,10 +730,18 @@ class RutaModel
                 $clienteId = $this->db->lastInsertId();
             }
 
-            // 1. Obtener ID de caja abierta
-            $this->db->query("SELECT id FROM cajas_sesiones WHERE usuario_id = :uid AND estado = 'ABIERTA'");
+            // 1. Obtener caja abierta (y su sucursal)
+            $this->db->query("SELECT id, sucursal_id FROM cajas_sesiones WHERE usuario_id = :uid AND estado = 'ABIERTA'");
             $this->db->bind(':uid', $datos['usuario_id']);
             $cajaAbierta = $this->db->single();
+
+            // Sucursal de la operacion: la de la caja abierta; si es una reserva sin caja, la del usuario
+            $sucursalVenta = $cajaAbierta->sucursal_id ?? null;
+            if (!$sucursalVenta) {
+                $this->db->query("SELECT sucursal_id FROM usuarios WHERE id = :uid");
+                $this->db->bind(':uid', $datos['usuario_id']);
+                $sucursalVenta = $this->db->single()->sucursal_id ?? null;
+            }
 
             // Venta, o cobro QR (se confirmara en esta caja): requiere caja abierta
             if ($datos['estado'] == 'vendido' || ($datos['metodo_pago'] ?? '') === 'QR') {
@@ -767,8 +775,10 @@ class RutaModel
                 throw new Exception("El asiento " . $datos['asiento'] . " ya está ocupado en el viaje #" . $datos['viaje_id'] . ". Seleccione otro.");
             }
 
-            // 3. Generar Código
-            $codigo = $this->generarCodigoBoleto();
+            // 3. Código: correlativo de la sucursal (EAL-000123). El aleatorio anterior
+            //    podia repetirse y hacer fallar la venta por el indice unico.
+            $codigo = $sucursalVenta ? Sucursal::siguienteCodigo($this->db, $sucursalVenta) : null;
+            $codigo = $codigo ?: $this->generarCodigoBoleto();
 
             // 4. Insertar Boleto
             $paradaId = !empty($datos['parada_id']) ? $datos['parada_id'] : null;
@@ -777,14 +787,15 @@ class RutaModel
             // Cobro QR pendiente: el asiento queda reservado solo unos minutos
             $minutosQr = !empty($datos['minutos_reserva']) ? max(1, (int) $datos['minutos_reserva']) : null;
 
-            $sql = "INSERT INTO boletos (viaje_id, cliente_id, usuario_vendedor_id, sesion_caja_id, numero_asiento, precio_final, metodo_pago, fecha_pago, estado, fecha_reserva, fecha_expiracion_reserva, codigo_boleto, parada_id)
-                    VALUES (:vid, :cid, :uid, :sesion, :asiento, :precio, :metodo, " . ($datos['estado'] == 'vendido' ? 'NOW()' : 'NULL') . ", :estado, NOW(), " . ($minutosQr ? 'DATE_ADD(NOW(), INTERVAL ' . $minutosQr . ' MINUTE)' : 'NULL') . ", :codigo, :parada_id)";
+            $sql = "INSERT INTO boletos (viaje_id, cliente_id, usuario_vendedor_id, sesion_caja_id, sucursal_id, numero_asiento, precio_final, metodo_pago, fecha_pago, estado, fecha_reserva, fecha_expiracion_reserva, codigo_boleto, parada_id)
+                    VALUES (:vid, :cid, :uid, :sesion, :sucursal, :asiento, :precio, :metodo, "  . ($datos['estado'] == 'vendido' ? 'NOW()' : 'NULL') . ", :estado, NOW(), " . ($minutosQr ? 'DATE_ADD(NOW(), INTERVAL ' . $minutosQr . ' MINUTE)' : 'NULL') . ", :codigo, :parada_id)";
 
             $this->db->query($sql);
             $this->db->bind(':vid', $datos['viaje_id']);
             $this->db->bind(':cid', $clienteId);
             $this->db->bind(':uid', $datos['usuario_id']);
             $this->db->bind(':sesion', $sesionId);
+            $this->db->bind(':sucursal', $sucursalVenta);
             $this->db->bind(':asiento', $datos['asiento']);
             $this->db->bind(':precio', $datos['precio']);
             $this->db->bind(':metodo', $metodoPago);
@@ -889,6 +900,9 @@ class RutaModel
                 -- Datos del Bus
                 bus.placa as bus_placa,
                 bus.id as bus_numero,
+                suc.nombre_sede as sucursal_nombre,
+                suc.direccion as sucursal_direccion,
+                suc.telefono as sucursal_telefono,
                 b.metodo_pago,
                 b.referencia_pago,
                 b.estado
@@ -900,6 +914,7 @@ class RutaModel
             LEFT JOIN rutas_paradas rp ON b.parada_id = rp.id
             LEFT JOIN terminales ter_orig ON v.terminal_origen_id = ter_orig.id
             LEFT JOIN vehiculos bus ON v.bus_id = bus.id
+            LEFT JOIN terminales suc ON suc.id = b.sucursal_id
             WHERE b.id = :id";
 
             $this->db->query($sql);
@@ -1080,17 +1095,18 @@ class RutaModel
                 throw new Exception('La reserva fue cancelada o venció. Vuelva a seleccionar el asiento.');
             }
 
-            $this->db->query("SELECT id FROM cajas_sesiones WHERE usuario_id = :uid AND estado = 'ABIERTA'");
+            $this->db->query("SELECT id, sucursal_id FROM cajas_sesiones WHERE usuario_id = :uid AND estado = 'ABIERTA'");
             $this->db->bind(':uid', $usuarioId);
             $caja = $this->db->single();
             if (!$caja) {
                 throw new Exception('No tiene una caja abierta. Abra caja para confirmar cobros.');
             }
 
-            $this->db->query("UPDATE boletos SET estado = 'vendido', sesion_caja_id = :caja, metodo_pago = :metodo,
+            $this->db->query("UPDATE boletos SET estado = 'vendido', sesion_caja_id = :caja, sucursal_id = COALESCE(:sucursal, sucursal_id), metodo_pago = :metodo,
                                      referencia_pago = :ref, fecha_pago = NOW(), fecha_expiracion_reserva = NULL
                               WHERE id = :id");
             $this->db->bind(':caja', $caja->id);
+            $this->db->bind(':sucursal', $caja->sucursal_id);
             $this->db->bind(':metodo', $metodo);
             $this->db->bind(':ref', $referencia !== null && $referencia !== '' ? mb_substr(trim($referencia), 0, 60) : null);
             $this->db->bind(':id', $boletoId);
@@ -1139,7 +1155,7 @@ class RutaModel
     /** Estado de un boleto para la pantalla del pasajero (sin datos personales). */
     public function estadoCobroBoleto($boletoId)
     {
-        $this->db->query("SELECT b.id, b.estado, b.metodo_pago, b.precio_final, b.numero_asiento, b.codigo_boleto,
+        $this->db->query("SELECT b.id, b.estado, b.metodo_pago, b.precio_final, b.numero_asiento, b.codigo_boleto, b.sucursal_id,
                                  GREATEST(TIMESTAMPDIFF(SECOND, NOW(), b.fecha_expiracion_reserva), 0) AS segundos_restantes,
                                  r.origen, COALESCE(rp.nombre_parada, r.destino) AS destino, v.fecha_salida
                           FROM boletos b

@@ -24,7 +24,11 @@ class Caja extends Controller
         $data = [
             'titulo' => 'Gestión de Caja',
             'title' => 'Control de Caja',
-            'caja_abierta' => $cajaAbierta
+            'caja_abierta' => $cajaAbierta,
+            // Apertura: el vendedor abre en su sucursal; Administrador/Supervisor eligen
+            'sucursal_usuario' => Sucursal::obtener(Sucursal::delUsuario()),
+            'puede_elegir_sucursal' => Sucursal::puedeVerTodas(),
+            'sucursales' => Sucursal::listar(),
         ];
 
         if ($cajaAbierta) {
@@ -58,7 +62,24 @@ class Caja extends Controller
             $monto = trim($_POST['monto_inicial']);
             $userId = $this->sessionManager->getUserId();
 
-            if ($this->cajaModel->abrirCaja($userId, $monto)) {
+            // Sucursal de la caja: la del usuario; Administrador/Supervisor pueden elegir otra
+            $sucursalId = Sucursal::delUsuario();
+            if (Sucursal::puedeVerTodas() && !empty($_POST['sucursal_id'])) {
+                $sucursalId = (int) $_POST['sucursal_id'];
+            }
+            $sucursal = Sucursal::obtener($sucursalId);
+            if (!$sucursal || !$sucursal->estado) {
+                $msg = Sucursal::puedeVerTodas()
+                    ? 'Seleccione la sucursal donde abrirá la caja.'
+                    : 'Su usuario no tiene una sucursal asignada. Pida al administrador que se la asigne en Usuarios del sistema.';
+                die('<script>alert(' . json_encode($msg) . '); window.history.back();</script>');
+            }
+            if ($this->cajaModel->verificarCajaAbierta($userId)) {
+                header('Location: ' . URLROOT . '/caja');
+                exit;
+            }
+
+            if ($this->cajaModel->abrirCaja($userId, $monto, $sucursal->id)) {
                 // Actualizar sesión para saber que hay caja
                 $caja = $this->cajaModel->verificarCajaAbierta($userId);
                 $this->sessionManager->setUserData(['caja_sesion_id' => $caja->id]);

@@ -161,7 +161,7 @@ $logoEmpresa = !empty($config_sidebar['empresa_logo']) ? URLROOT . '/' . $config
                         <li class="nav-item">
                             <a href="<?php echo URLROOT; ?>/admin/registrar_terminal" class="nav-link">
                                 <i class="nav-icon bi bi-building"></i>
-                                <p>Registrar Terminal</p>
+                                <p>Sucursales</p>
                             </a>
                         </li>
                         <li class="nav-item">

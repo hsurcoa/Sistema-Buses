@@ -102,12 +102,13 @@ class ControladorTransacciones extends Controller
         $esQr = ($datos['tipo'] === 'qr');
         $minutosQr = null;
         if ($esQr) {
-            $config = $this->model('ConfiguracionModel')->obtenerConfiguracion();
-            if (empty($config['pago_qr_activo']) || empty($config['pago_qr_imagen'])) {
+            $caja = $this->model('CajaModel')->verificarCajaAbierta(SessionManager::getInstance()->getUserId());
+            $qr = $this->model('ConfiguracionModel')->obtenerPagoQr($caja->sucursal_id ?? Sucursal::delUsuario());
+            if (!$qr) {
                 echo json_encode(['status' => 'error', 'msg' => 'El cobro con QR no está configurado. Un administrador debe cargar el QR en Configuración.']);
                 return;
             }
-            $minutosQr = max(3, (int) ($config['pago_qr_minutos'] ?? 15));
+            $minutosQr = $qr['minutos'];
         }
 
         // Preparar Datos Modelo

@@ -47,19 +47,20 @@ class Ventas extends Controller
         // Obtener viajes programados
         $viajesProgramados = $this->rutaModel->listarViajesProgramados(50, 0);
 
-        $config = $this->model('ConfiguracionModel')->obtenerConfiguracion();
+        // Sucursal donde se vende: la de la caja abierta o, si no hay, la del usuario
+        $caja = $this->model('CajaModel')->verificarCajaAbierta($this->sessionManager->getUserId());
+        $sucursalVenta = $caja->sucursal_id ?? Sucursal::delUsuario();
 
         $data = [
             'title' => 'Venta de Pasajes',
             'viajesProgramados' => $viajesProgramados,
-            // Cobro con QR (solo si un administrador lo activo y cargo la imagen)
-            'pago_qr' => (!empty($config['pago_qr_activo']) && !empty($config['pago_qr_imagen'])) ? [
-                'imagen' => URLROOT . '/' . $config['pago_qr_imagen'],
-                'titular' => $config['pago_qr_titular'] ?? '',
-                'entidad' => $config['pago_qr_entidad'] ?? '',
-                'instrucciones' => $config['pago_qr_instrucciones'] ?? '',
-                'minutos' => max(3, (int) ($config['pago_qr_minutos'] ?? 15)),
-            ] : null,
+            // Cobro con QR: QR propio de la sucursal o, si no tiene, el general
+            'pago_qr' => $this->model('ConfiguracionModel')->obtenerPagoQr($sucursalVenta),
+            'sucursal_venta' => Sucursal::obtener($sucursalVenta),
+            'empresa' => (function () {
+                $cfg = $this->model('ConfiguracionModel')->obtenerConfiguracion();
+                return ['nombre' => $cfg['empresa_nombre'] ?? SITENAME, 'nit' => $cfg['empresa_nit'] ?? ''];
+            })(),
         ];
 
         $this->view('layouts/header', $data);
@@ -906,12 +907,13 @@ class Ventas extends Controller
      */
     public function pantalla_qr($id)
     {
-        $config = $this->model('ConfiguracionModel')->obtenerConfiguracion();
+        $configModel = $this->model('ConfiguracionModel');
         $cobro = $this->rutaModel->estadoCobroBoleto($id);
 
         $this->view('ventas/pantalla_qr', [
             'cobro' => $cobro,
-            'config' => $config,
+            'config' => $configModel->obtenerConfiguracion(),
+            'qr' => $configModel->obtenerPagoQr($cobro->sucursal_id ?? null),
         ]);
     }
 

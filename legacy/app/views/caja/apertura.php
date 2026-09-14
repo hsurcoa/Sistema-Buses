@@ -26,6 +26,31 @@
                                     <h4 class="text-dark fw-bold"><?php echo date('d/m/Y H:i:s'); ?></h4>
                                 </div>
 
+                                <!-- Sucursal de la caja -->
+                                <div class="mb-4">
+                                    <?php if (!empty($data['puede_elegir_sucursal'])): ?>
+                                        <label for="sucursal_id" class="form-label text-muted fw-bold small">SUCURSAL</label>
+                                        <select class="form-select form-select-lg" name="sucursal_id" id="sucursal_id" required>
+                                            <option value="">Seleccione la sucursal…</option>
+                                            <?php foreach ($data['sucursales'] as $s): ?>
+                                                <option value="<?php echo (int) $s->id; ?>" <?php echo (!empty($data['sucursal_usuario']) && (int) $data['sucursal_usuario']->id === (int) $s->id) ? 'selected' : ''; ?>>
+                                                    <?php echo htmlspecialchars($s->nombre_sede); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <div class="form-text">Todo lo que cobre en esta caja quedará registrado en esa sucursal.</div>
+                                    <?php elseif (!empty($data['sucursal_usuario'])): ?>
+                                        <div class="text-center">
+                                            <small class="text-muted text-uppercase fw-bold">Sucursal</small>
+                                            <h5 class="fw-bold mb-0"><?php echo htmlspecialchars($data['sucursal_usuario']->nombre_sede); ?></h5>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="alert alert-warning mb-0">
+                                            Su usuario no tiene una sucursal asignada. Pida al administrador que se la asigne en <strong>Usuarios del sistema</strong> para poder abrir caja.
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
                                 <!-- Input Monto -->
                                 <div class="mb-4">
                                     <label for="monto_inicial" class="form-label text-muted fw-bold small">MONTO INICIAL (Base/Cambio)</label>

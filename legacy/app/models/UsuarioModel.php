@@ -81,7 +81,7 @@ class UsuarioModel
     public function listarUsuarios()
     {
         $this->db->query("SELECT u.id, u.username, u.nombres, u.apellidos, u.email, u.rol_id, u.estado, u.created_at,
-                                 u.nro_documento, u.celular,
+                                 u.nro_documento, u.celular, u.sucursal_id, t.nombre_sede AS sucursal,
                                  r.nombre AS rol,
                                  (SELECT COUNT(*) FROM boletos b WHERE b.usuario_vendedor_id = u.id) AS total_boletos,
                                  (SELECT COUNT(*) FROM cajas_sesiones c WHERE c.usuario_id = u.id) AS total_cajas,
@@ -89,6 +89,7 @@ class UsuarioModel
                                  (u.username LIKE 'chofer\\_%' OR u.email LIKE '%.sistema.temp' OR u.email LIKE '%@test.com') AS automatica
                           FROM usuarios u
                           LEFT JOIN roles r ON r.id = u.rol_id
+                          LEFT JOIN terminales t ON t.id = u.sucursal_id
                           ORDER BY u.estado = 'activo' DESC, r.nombre, u.apellidos, u.nombres");
         return $this->db->resultSet();
     }
@@ -96,7 +97,7 @@ class UsuarioModel
     public function obtenerUsuario($id)
     {
         $this->db->query("SELECT u.id, u.username, u.nombres, u.apellidos, u.email, u.rol_id, u.estado,
-                                 u.nro_documento, u.celular, r.nombre AS rol
+                                 u.nro_documento, u.celular, u.sucursal_id, r.nombre AS rol
                           FROM usuarios u LEFT JOIN roles r ON r.id = u.rol_id
                           WHERE u.id = :id");
         $this->db->bind(':id', $id);
@@ -136,8 +137,8 @@ class UsuarioModel
 
     public function crearUsuario($d)
     {
-        $this->db->query("INSERT INTO usuarios (username, nombres, apellidos, email, password, rol_id, estado, nro_documento, celular)
-                          VALUES (:username, :nombres, :apellidos, :email, :password, :rol_id, :estado, :doc, :celular)");
+        $this->db->query("INSERT INTO usuarios (username, nombres, apellidos, email, password, rol_id, estado, nro_documento, celular, sucursal_id)
+                          VALUES (:username, :nombres, :apellidos, :email, :password, :rol_id, :estado, :doc, :celular, :sucursal)");
         $this->bindUsuario($d);
         $this->db->bind(':password', $d['password_hash']);
         $this->db->execute();
@@ -148,7 +149,7 @@ class UsuarioModel
     {
         $conPassword = !empty($d['password_hash']);
         $this->db->query("UPDATE usuarios SET username = :username, nombres = :nombres, apellidos = :apellidos, email = :email,
-                                 rol_id = :rol_id, estado = :estado, nro_documento = :doc, celular = :celular"
+                                 rol_id = :rol_id, estado = :estado, nro_documento = :doc, celular = :celular, sucursal_id = :sucursal"
             . ($conPassword ? ', password = :password' : '') . "
                           WHERE id = :id");
         $this->bindUsuario($d);
@@ -200,5 +201,6 @@ class UsuarioModel
         $this->db->bind(':estado', $d['activo'] ? 'activo' : 'inactivo');
         $this->db->bind(':doc', $d['nro_documento'] !== '' ? $d['nro_documento'] : null);
         $this->db->bind(':celular', $d['celular'] !== '' ? $d['celular'] : null);
+        $this->db->bind(':sucursal', !empty($d['sucursal_id']) ? (int) $d['sucursal_id'] : null);
     }
 }

@@ -74,7 +74,10 @@ class Configuracion extends Controller
             $datos['pago_qr_imagen'] = $destino;
         }
 
-        $tieneImagen = !empty($datos['pago_qr_imagen']) || !empty($actual['pago_qr_imagen']);
+        $db = new Database();
+        $db->query("SELECT COUNT(*) AS n FROM terminales WHERE pago_qr_imagen IS NOT NULL AND pago_qr_imagen <> ''");
+        $qrSucursales = (int) $db->single()->n;
+        $tieneImagen = !empty($datos['pago_qr_imagen']) || !empty($actual['pago_qr_imagen']) || $qrSucursales > 0;
         $datos['pago_qr_activo'] = (!empty($_POST['pago_qr_activo']) && $tieneImagen) ? '1' : '0';
 
         $ok = $this->configModel->guardarConfiguracion($datos);
@@ -88,7 +91,8 @@ class Configuracion extends Controller
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $datos = [
                 'empresa_nombre' => trim($_POST['empresa_nombre']),
-                'empresa_slogan' => trim($_POST['empresa_slogan'])
+                'empresa_slogan' => trim($_POST['empresa_slogan']),
+                'empresa_nit' => mb_substr(trim($_POST['empresa_nit'] ?? ''), 0, 30),
             ];
 
             // Manejo de subida de Logo

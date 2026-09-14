@@ -3,16 +3,23 @@
 require_once '../app/bootstrap.php';
 
 // Cuenta desactivada por un administrador: la sesion abierta deja de valer.
-// El rol se relee de la BD para que un cambio de rol aplique sin re-login.
+// Rol y sucursal se releen de la BD para que un cambio aplique sin re-login.
 if ($sessionManager->isAuthenticated()) {
     $dbSesion = new Database();
-    $dbSesion->query("SELECT u.estado, r.nombre AS rol FROM usuarios u LEFT JOIN roles r ON r.id = u.rol_id WHERE u.id = :id");
+    $dbSesion->query("SELECT u.estado, r.nombre AS rol, u.sucursal_id, t.nombre_sede AS sucursal_nombre
+                      FROM usuarios u
+                      LEFT JOIN roles r ON r.id = u.rol_id
+                      LEFT JOIN terminales t ON t.id = u.sucursal_id
+                      WHERE u.id = :id");
     $dbSesion->bind(':id', $sessionManager->getUserId());
     $cuenta = $dbSesion->single();
     if (!$cuenta || $cuenta->estado !== 'activo') {
         $sessionManager->destroy();
-    } elseif ($cuenta->rol && ($_SESSION['rol'] ?? null) !== $cuenta->rol) {
-        $_SESSION['rol'] = $cuenta->rol;
+    } else {
+        // Rol y sucursal siempre al dia (un cambio del administrador aplica sin re-login)
+        $_SESSION['rol'] = $cuenta->rol ?: ($_SESSION['rol'] ?? null);
+        $_SESSION['sucursal_id'] = $cuenta->sucursal_id ? (int) $cuenta->sucursal_id : null;
+        $_SESSION['sucursal_nombre'] = $cuenta->sucursal_nombre;
     }
 }
 

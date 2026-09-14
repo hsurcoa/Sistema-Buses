@@ -59,6 +59,11 @@
                                                 value="<?php echo $data['config']['empresa_slogan'] ?? ''; ?>" placeholder="Ej: Empresa de Transporte">
                                         </div>
                                         <div class="mb-3">
+                                            <label for="empresa_nit" class="form-label">NIT de la empresa</label>
+                                            <input type="text" class="form-control" id="empresa_nit" name="empresa_nit" maxlength="30"
+                                                value="<?php echo htmlspecialchars($data['config']['empresa_nit'] ?? ''); ?>" placeholder="Se imprime en el ticket">
+                                        </div>
+                                        <div class="mb-3">
                                             <label for="empresa_logo" class="form-label">Subir Nuevo Logo</label>
                                             <input class="form-control" type="file" id="empresa_logo" name="empresa_logo" accept="image/*">
                                             <div class="form-text">Formatos permitidos: PNG, JPG, SVG. Fondo transparente recomendado.</div>

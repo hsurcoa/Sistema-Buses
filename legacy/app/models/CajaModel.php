@@ -11,20 +11,23 @@ class CajaModel
     // Verificar si el usuario tiene caja abierta
     public function verificarCajaAbierta($usuarioId)
     {
-        $this->db->query("SELECT * FROM cajas_sesiones WHERE usuario_id = :usuario_id AND estado = 'ABIERTA'");
+        $this->db->query("SELECT cs.*, t.nombre_sede AS sucursal_nombre
+                          FROM cajas_sesiones cs LEFT JOIN terminales t ON t.id = cs.sucursal_id
+                          WHERE cs.usuario_id = :usuario_id AND cs.estado = 'ABIERTA'");
         $this->db->bind(':usuario_id', $usuarioId);
         return $this->db->single();
     }
 
     // Abrir Caja
-    public function abrirCaja($usuarioId, $montoInicial)
+    public function abrirCaja($usuarioId, $montoInicial, $sucursalId = null)
     {
         try {
             $this->db->beginTransaction();
 
-            // 1. Crear Sesión
-            $this->db->query("INSERT INTO cajas_sesiones (usuario_id, monto_inicial, fecha_apertura) VALUES (:usuario_id, :monto, NOW())");
+            // 1. Crear Sesión (en la sucursal donde se opera: todo lo cobrado queda en ella)
+            $this->db->query("INSERT INTO cajas_sesiones (usuario_id, sucursal_id, monto_inicial, fecha_apertura) VALUES (:usuario_id, :sucursal, :monto, NOW())");
             $this->db->bind(':usuario_id', $usuarioId);
+            $this->db->bind(':sucursal', $sucursalId);
             $this->db->bind(':monto', $montoInicial);
             $this->db->execute();
             $sesionId = $this->db->lastInsertId();
@@ -175,12 +178,15 @@ class CajaModel
     // --- NUEVO: OBTENER SESIONES CERRADAS POR FECHA ---
     public function obtenerSesionesCerradas($fechaInicio, $fechaFin)
     {
+        [$condSucursal, $paramsSucursal] = Sucursal::condicion('cs.sucursal_id');
         $inicioFull = $fechaInicio . ' 00:00:00';
         $finFull = $fechaFin . ' 23:59:59';
 
         $sql = "SELECT 
                     cs.id,
                     cs.usuario_id,
+                    cs.sucursal_id,
+                    t.nombre_sede AS sucursal_nombre,
                     CONCAT(u.nombres, ' ', u.apellidos) as cajero_nombre,
                     cs.fecha_apertura,
                     cs.fecha_cierre,
@@ -194,13 +200,17 @@ class CajaModel
                      WHERE sesion_id = cs.id AND tipo_movimiento = 'EGRESO') as total_egresos
                 FROM cajas_sesiones cs
                 INNER JOIN usuarios u ON cs.usuario_id = u.id
+                LEFT JOIN terminales t ON t.id = cs.sucursal_id
                 WHERE cs.estado = 'CERRADA'
-                AND cs.fecha_cierre BETWEEN :inicio AND :fin
+                AND cs.fecha_cierre BETWEEN :inicio AND :fin" . $condSucursal . "
                 ORDER BY cs.fecha_cierre DESC";
 
         $this->db->query($sql);
         $this->db->bind(':inicio', $inicioFull);
         $this->db->bind(':fin', $finFull);
+        foreach ($paramsSucursal as $k => $v) {
+            $this->db->bind($k, $v);
+        }
 
         return $this->db->resultSet();
     }
@@ -208,6 +218,7 @@ class CajaModel
     // --- NUEVO: ESTADÍSTICAS DEL PERÍODO ---
     public function obtenerEstadisticasPeriodo($fechaInicio, $fechaFin)
     {
+        [$condSucursal, $paramsSucursal] = Sucursal::condicion('cs.sucursal_id');
         $inicioFull = $fechaInicio . ' 00:00:00';
         $finFull = $fechaFin . ' 23:59:59';
 
@@ -218,13 +229,16 @@ class CajaModel
                     SUM(monto_final_real) as suma_real,
                     SUM(diferencia) as suma_diferencias,
                     AVG(monto_final_sistema) as promedio_sistema
-                FROM cajas_sesiones
-                WHERE estado = 'CERRADA'
-                AND fecha_cierre BETWEEN :inicio AND :fin";
+                FROM cajas_sesiones cs
+                WHERE cs.estado = 'CERRADA'
+                AND cs.fecha_cierre BETWEEN :inicio AND :fin" . $condSucursal;
 
         $this->db->query($sql);
         $this->db->bind(':inicio', $inicioFull);
         $this->db->bind(':fin', $finFull);
+        foreach ($paramsSucursal as $k => $v) {
+            $this->db->bind($k, $v);
+        }
 
         return $this->db->single();
     }

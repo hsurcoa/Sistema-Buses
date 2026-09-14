@@ -6,6 +6,7 @@
  */
 $cobro = $data['cobro'];
 $cfg = $data['config'];
+$qr = $data['qr'];
 $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
 ?>
@@ -82,8 +83,8 @@ $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
 </head>
 <body class="<?php echo !$cobro ? 'vencido' : ($cobro->estado === 'vendido' ? 'pagado' : ($cobro->estado !== 'reservado' ? 'vencido' : '')); ?>">
     <main class="tarjeta" aria-live="polite">
-        <?php if ($cobro && !empty($cfg['pago_qr_imagen'])): ?>
-            <img class="qr pendiente" src="<?php echo URLROOT . '/' . $e($cfg['pago_qr_imagen']); ?>" alt="Código QR para pagar">
+        <?php if ($cobro && $qr): ?>
+            <img class="qr pendiente" src="<?php echo $e($qr['imagen']); ?>" alt="Código QR para pagar">
             <section class="pendiente">
                 <p class="empresa"><?php echo $e($empresa); ?></p>
                 <h1>Escanee el código para pagar su pasaje</h1>
@@ -94,8 +95,8 @@ $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
                     <?php echo $e($cobro->origen); ?> → <?php echo $e($cobro->destino); ?><br>
                     Tiempo para pagar: <span class="reloj" id="reloj">--:--</span>
                 </p>
-                <?php if (!empty($cfg['pago_qr_titular']) || !empty($cfg['pago_qr_entidad'])): ?>
-                    <p class="instrucciones">Beneficiario: <?php echo $e(trim(($cfg['pago_qr_titular'] ?? '') . (!empty($cfg['pago_qr_entidad']) ? ' · ' . $cfg['pago_qr_entidad'] : ''), ' ·')); ?></p>
+                <?php if ($qr['titular'] || $qr['entidad']): ?>
+                    <p class="instrucciones">Beneficiario: <?php echo $e(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?></p>
                 <?php endif; ?>
                 <?php if (!empty($cfg['pago_qr_instrucciones'])): ?>
                     <p class="instrucciones"><?php echo $e($cfg['pago_qr_instrucciones']); ?></p>

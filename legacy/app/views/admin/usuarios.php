@@ -71,7 +71,7 @@ $automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && 
                             <thead>
                                 <tr>
                                     <th>Usuario</th>
-                                    <th>Rol</th>
+                                    <th>Rol / sucursal</th>
                                     <th>Estado</th>
                                     <th>Historial</th>
                                     <th class="text-end">Acciones</th>
@@ -85,7 +85,7 @@ $automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && 
                                     $datos = [
                                         'id' => (int) $u->id, 'nombres' => $u->nombres, 'apellidos' => $u->apellidos, 'email' => $u->email,
                                         'username' => $u->username, 'nro_documento' => $u->nro_documento, 'celular' => $u->celular,
-                                        'rol_id' => (int) $u->rol_id, 'activo' => $u->estado === 'activo',
+                                        'rol_id' => (int) $u->rol_id, 'sucursal_id' => (int) $u->sucursal_id, 'activo' => $u->estado === 'activo',
                                     ];
                                     ?>
                                     <tr data-rol="<?php echo $e($u->rol ?: 'Sin rol'); ?>" data-estado="<?php echo $e($u->estado); ?>">
@@ -100,7 +100,12 @@ $automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && 
                                                 <?php if ($u->username): ?> · <?php echo $e($u->username); ?><?php endif; ?>
                                             </div>
                                         </td>
-                                        <td><span class="badge text-bg-light border"><?php echo $e($u->rol ?: 'Sin rol'); ?></span></td>
+                                        <td>
+                                            <span class="badge text-bg-light border"><?php echo $e($u->rol ?: 'Sin rol'); ?></span>
+                                            <div class="small <?php echo $u->sucursal ? 'text-muted' : (in_array($u->rol, ['Administrador', 'Supervisor'], true) ? 'text-muted' : 'text-danger'); ?>">
+                                                <?php echo $u->sucursal ? $e($u->sucursal) : (in_array($u->rol, ['Administrador', 'Supervisor'], true) ? 'Todas las sucursales' : 'Sin sucursal'); ?>
+                                            </div>
+                                        </td>
                                         <td>
                                             <?php if ($u->estado === 'activo'): ?>
                                                 <span class="badge bg-success-subtle text-success">Activo</span>
@@ -183,6 +188,18 @@ $automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && 
                                 <option value="<?php echo (int) $rol->id; ?>"><?php echo $e($rol->nombre); ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="uSucursal">Sucursal</label>
+                        <select class="form-select" id="uSucursal" name="sucursal_id">
+                            <option value="">Sin sucursal fija (solo Administrador o Supervisor)</option>
+                            <?php foreach ($data['sucursales'] ?? [] as $s): ?>
+                                <option value="<?php echo (int) $s->id; ?>"><?php echo $e($s->nombre_sede); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-text mt-md-4 pt-md-2">El vendedor opera y ve solo su sucursal; Administrador y Supervisor pueden trabajar en cualquiera.</div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label" for="uUsername">Usuario <span class="text-muted fw-normal">(opcional)</span></label>
@@ -292,6 +309,7 @@ $automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && 
                 document.getElementById('uDocumento').value = u.nro_documento || '';
                 document.getElementById('uCelular').value = u.celular || '';
                 document.getElementById('uRol').value = u.rol_id || '';
+                document.getElementById('uSucursal').value = u.sucursal_id || '';
                 document.getElementById('uActivo').checked = !!u.activo;
             }
             actualizarPassword();

@@ -110,6 +110,7 @@
                                 </span>
                                 <span class="user-role">
                                     <?php echo isset($_SESSION['rol']) ? ucfirst($_SESSION['rol']) : 'Conectado'; ?>
+                                    <?php if (!empty($_SESSION['sucursal_nombre'])): ?> · <?php echo htmlspecialchars($_SESSION['sucursal_nombre']); ?><?php endif; ?>
                                 </span>
                             </div>
                         </a>

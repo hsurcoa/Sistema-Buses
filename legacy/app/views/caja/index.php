@@ -20,8 +20,9 @@
                         <i class="bi bi-check-circle-fill me-1"></i> CAJA ABIERTA
                     </span>
                     <div class="mt-2 text-muted small">
-                        Abierto por: <strong class="text-dark"><?php echo $_SESSION['user_name'] ?? 'Usuario'; ?></strong><br>
-                        Desde: <?php echo date('d/m/Y H:i'); ?>
+                        Sucursal: <strong class="text-dark"><?php echo htmlspecialchars($data['caja_abierta']->sucursal_nombre ?? 'Sin sucursal'); ?></strong><br>
+                        Abierta por: <strong class="text-dark"><?php echo htmlspecialchars($_SESSION['usuario'] ?? 'Usuario'); ?></strong><br>
+                        Desde: <?php echo date('d/m/Y H:i', strtotime($data['caja_abierta']->fecha_apertura)); ?>
                     </div>
                 </div>
             </div>

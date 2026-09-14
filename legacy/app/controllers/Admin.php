@@ -286,6 +286,7 @@ class Admin extends Controller
             'title' => 'Usuarios del sistema',
             'usuarios' => $usuarioModel->listarUsuarios(),
             'roles' => $usuarioModel->listarRolesActivos(),
+            'sucursales' => Sucursal::listar(),
             'usuario_actual_id' => (int) $this->sessionManager->getUserId(),
         ];
 
@@ -312,6 +313,7 @@ class Admin extends Controller
             'nro_documento' => trim($_POST['nro_documento'] ?? ''),
             'celular' => trim($_POST['celular'] ?? ''),
             'rol_id' => (int) ($_POST['rol_id'] ?? 0),
+            'sucursal_id' => (int) ($_POST['sucursal_id'] ?? 0),
             'activo' => !empty($_POST['activo']),
         ];
         $password = (string) ($_POST['password'] ?? '');
@@ -337,6 +339,14 @@ class Admin extends Controller
         $rol = $usuarioModel->rolActivo($d['rol_id']);
         if (!$rol) {
             $errores[] = 'Seleccione un rol activo.';
+        }
+        // Cada vendedor trabaja en una sola sucursal; Administrador y Supervisor pueden no tener una fija
+        $sucursal = $d['sucursal_id'] ? Sucursal::obtener($d['sucursal_id']) : null;
+        if ($d['sucursal_id'] && (!$sucursal || !$sucursal->estado)) {
+            $errores[] = 'La sucursal seleccionada no existe o está inactiva.';
+        }
+        if (!$d['sucursal_id'] && $rol && !in_array($rol->nombre, ['Administrador', 'Supervisor'], true)) {
+            $errores[] = 'Asigne la sucursal donde trabaja este usuario (obligatoria para el rol ' . $rol->nombre . ').';
         }
 
         if ($generar) {
@@ -743,13 +753,13 @@ class Admin extends Controller
         exit;
     }
 
+    /** Sucursales (antes "Registrar Terminal"): cada terminal es una sucursal con su caja. */
     public function registrar_terminal()
     {
-        $terminales = $this->terminalModel->listarTerminales();
-
         $data = [
-            'title' => 'Registrar Terminal',
-            'terminales' => $terminales
+            'title' => 'Sucursales',
+            'terminales' => $this->terminalModel->listarSucursales(),
+            'es_admin' => $this->esAdministrador(),
         ];
 
         $this->view('layouts/header', $data);
@@ -760,59 +770,100 @@ class Admin extends Controller
 
     public function guardar_terminal()
     {
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            $data = [
-                'id' => $_POST['id'] ?? '',
-                'nombre_sede' => trim($_POST['nombre_sede']),
-                'direccion' => trim($_POST['direccion']),
-                'numero_oficina' => trim($_POST['numero_oficina'])
-            ];
-
-            if (empty($data['nombre_sede']) || empty($data['direccion'])) {
-                echo "<script>alert('Complete los campos obligatorios'); window.location.href='" . URLROOT . "/admin/registrar_terminal';</script>";
-                return;
-            }
-
-            if (!empty($data['id'])) {
-                // Actualizar
-                if ($this->terminalModel->actualizarTerminal($data)) {
-                    echo "<script>alert('Terminal actualizado'); window.location.href='" . URLROOT . "/admin/registrar_terminal';</script>";
-                } else {
-                    echo "<script>alert('Error al actualizar'); window.location.href='" . URLROOT . "/admin/registrar_terminal';</script>";
-                }
-            } else {
-                // Crear
-                if ($this->terminalModel->agregarTerminal($data)) {
-                    echo "<script>alert('Terminal registrado'); window.location.href='" . URLROOT . "/admin/registrar_terminal';</script>";
-                } else {
-                    echo "<script>alert('Error al registrar'); window.location.href='" . URLROOT . "/admin/registrar_terminal';</script>";
-                }
-            }
-        } else {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ' . URLROOT . '/admin/registrar_terminal');
+            exit;
         }
+        $volver = function ($msg, $detalle = '') {
+            header('Location: ' . URLROOT . '/admin/registrar_terminal?msg=' . $msg . ($detalle !== '' ? '&detalle=' . urlencode($detalle) : ''));
+            exit;
+        };
+
+        if (!$this->sessionManager->verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+            $volver('error', 'La sesión expiró. Recargue la página.');
+        }
+        if (!$this->esAdministrador()) {
+            $volver('error', 'Solo un Administrador puede crear o modificar sucursales.');
+        }
+
+        $d = [
+            'id' => (int) ($_POST['id'] ?? 0),
+            'nombre_sede' => trim($_POST['nombre_sede'] ?? ''),
+            'direccion' => trim($_POST['direccion'] ?? ''),
+            'numero_oficina' => trim($_POST['numero_oficina'] ?? ''),
+            'telefono' => trim($_POST['telefono'] ?? ''),
+            'prefijo_boleto' => strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $_POST['prefijo_boleto'] ?? '')),
+            'pago_qr_titular' => trim($_POST['pago_qr_titular'] ?? ''),
+            'pago_qr_entidad' => trim($_POST['pago_qr_entidad'] ?? ''),
+        ];
+
+        if ($d['nombre_sede'] === '' || $d['direccion'] === '') {
+            $volver('error', 'El nombre y la dirección de la sucursal son obligatorios.');
+        }
+        if (!preg_match('/^[A-Z0-9]{2,5}$/', $d['prefijo_boleto'])) {
+            $volver('error', 'El prefijo de boleto debe tener de 2 a 5 letras o números (p. ej. EAL).');
+        }
+        if ($this->terminalModel->prefijoEnUso($d['prefijo_boleto'], $d['id'])) {
+            $volver('error', 'El prefijo ' . $d['prefijo_boleto'] . ' ya lo usa otra sucursal.');
+        }
+
+        if (!empty($_POST['quitar_qr'])) {
+            $d['pago_qr_imagen'] = null;
+        }
+        if (!empty($_FILES['pago_qr_imagen']['name'])) {
+            $archivo = $_FILES['pago_qr_imagen'];
+            $info = @getimagesize($archivo['tmp_name']);
+            $tipos = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp'];
+            if ($archivo['error'] !== UPLOAD_ERR_OK || !$info || !isset($tipos[$info[2]])) {
+                $volver('error', 'El QR debe ser una imagen PNG, JPG o WEBP.');
+            }
+            if ($archivo['size'] > 2 * 1024 * 1024) {
+                $volver('error', 'La imagen del QR debe pesar como máximo 2 MB.');
+            }
+            if (!is_dir('uploads/pagos/')) {
+                mkdir('uploads/pagos/', 0755, true);
+            }
+            $destino = 'uploads/pagos/qr_sucursal_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $tipos[$info[2]];
+            if (!move_uploaded_file($archivo['tmp_name'], $destino)) {
+                $volver('error', 'No se pudo guardar la imagen del QR.');
+            }
+            $d['pago_qr_imagen'] = $destino;
+        }
+
+        try {
+            $this->terminalModel->guardarSucursal($d);
+        } catch (Exception $e) {
+            error_log('Admin::guardar_terminal: ' . $e->getMessage());
+            $volver('error', 'No se pudo guardar la sucursal.');
+        }
+        $volver($d['id'] ? 'actualizada' : 'creada');
     }
 
     public function cambiar_estado_terminal($id)
     {
-        $terminal = $this->terminalModel->obtenerTerminal($id);
-        if ($terminal) {
-            $nuevo_estado = $terminal->estado ? 0 : 1;
-            $this->terminalModel->cambiarEstado($id, $nuevo_estado);
+        if ($this->esAdministrador()) {
+            $terminal = $this->terminalModel->obtenerTerminal($id);
+            if ($terminal) {
+                $this->terminalModel->cambiarEstado($id, $terminal->estado ? 0 : 1);
+            }
         }
         header('Location: ' . URLROOT . '/admin/registrar_terminal');
     }
 
     public function eliminar_terminal($id)
     {
-        if ($this->terminalModel->eliminarTerminal($id)) {
-            // Optional: You could set a session flash message here
-            // Eliminación de terminal realizada
+        if (!$this->esAdministrador()) {
+            header('Location: ' . URLROOT . '/admin/registrar_terminal?msg=error&detalle=' . urlencode('Solo un Administrador puede eliminar sucursales.'));
+            exit;
         }
-        header('Location: ' . URLROOT . '/admin/registrar_terminal');
+        if ($this->terminalModel->eliminarSucursalSinHistorial($id)) {
+            header('Location: ' . URLROOT . '/admin/registrar_terminal?msg=eliminada');
+        } else {
+            header('Location: ' . URLROOT . '/admin/registrar_terminal?msg=error&detalle=' . urlencode('La sucursal tiene usuarios, viajes, ventas o encomiendas: desactívela en lugar de eliminarla.'));
+        }
+        exit;
     }
 
-    /** Finaliza la asignacion: no se borra, queda en el historial. */
     public function eliminar_asignacion($id)
     {
         $this->asignacionModel->finalizarAsignacion($id);

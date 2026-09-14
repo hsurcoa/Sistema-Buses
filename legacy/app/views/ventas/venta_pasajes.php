@@ -1148,6 +1148,8 @@
 
         <script>
             const URLROOT = '<?php echo URLROOT; ?>';
+            // Datos reales de la empresa para el ticket (Configuración)
+            window.EMPRESA_TICKET = <?php echo json_encode(['nombre' => $data['empresa']['nombre'] ?? '', 'nit' => $data['empresa']['nit'] ?? ''], JSON_UNESCAPED_UNICODE); ?>;
             const CSRF_TOKEN = '<?php echo $_SESSION['csrf_token'] ?? ''; ?>';
             // Esta vista usa toastr, pero la libreria nunca se carga en el layout:
             // cada aviso ("Asiento Ocupado", errores de carga...) lanzaba
@@ -1787,11 +1789,7 @@
 
                 // Mapear datos del pasajero al formato del ticket térmico
                 const datosBoleto = {
-                    // Datos de la empresa (hardcoded o desde configuración)
-                    empresaDireccion: 'Terminal BusDriver',
-                    empresaTelefono: '967885780',
-                    empresaEmail: 'atencioncliente@busdriver.com',
-                    empresaRuc: '20201563254',
+                    // Empresa y NIT salen de window.EMPRESA_TICKET (Configuración)
 
                     // Datos del boleto
                     numeroBoleto: pasajero.codigo_boleto || 'SIN CÓDIGO',
@@ -1922,8 +1920,8 @@
                                 documentoPasajero: t.numero_documento,
                                 fechaExpedicion: t.fecha_venta,
                                 importe: t.precio,
-                                empresaDireccion: 'Terminal BusDriver', // Hardcoded o desde config
-                                empresaTelefono: '-'
+                                empresaDireccion: ['Sucursal ' + (t.sucursal_nombre || ''), t.sucursal_direccion].filter(x => x && x !== 'Sucursal ').join(' · '),
+                                empresaTelefono: t.sucursal_telefono || ''
                             };
                             imprimirTicket(datosTicket);
                         }
@@ -2072,8 +2070,8 @@
                     documentoPasajero: t.numero_documento,
                     fechaExpedicion: t.fecha_venta,
                     importe: t.precio,
-                    empresaDireccion: 'Terminal BusDriver',
-                    empresaTelefono: '-'
+                    empresaDireccion: ['Sucursal ' + (t.sucursal_nombre || ''), t.sucursal_direccion].filter(x => x && x !== 'Sucursal ').join(' · '),
+                    empresaTelefono: t.sucursal_telefono || ''
                 });
             }
 
@@ -2331,8 +2329,8 @@
                                         documentoPasajero: t.numero_documento,
                                         fechaExpedicion: t.fecha_venta,
                                         importe: t.precio,
-                                        empresaDireccion: 'Terminal BusDriver',
-                                        empresaTelefono: '-'
+                                        empresaDireccion: ['Sucursal ' + (t.sucursal_nombre || ''), t.sucursal_direccion].filter(x => x && x !== 'Sucursal ').join(' · '),
+                                        empresaTelefono: t.sucursal_telefono || ''
                                     };
                                     imprimirTicket(datosPrint);
                                 } else if (res.id_boleto) {

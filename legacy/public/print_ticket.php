@@ -34,6 +34,13 @@ $sql = "SELECT
             b.numero_asiento,
             b.precio_final,
             b.fecha_reserva as fecha_emision,
+            b.metodo_pago,
+            b.referencia_pago,
+
+            -- Sucursal que vendio
+            suc.nombre_sede as sucursal_nombre,
+            suc.direccion as sucursal_direccion,
+            suc.telefono as sucursal_telefono,
             
             -- Cliente
             c.nombres,
@@ -61,6 +68,7 @@ $sql = "SELECT
         INNER JOIN viajes v ON b.viaje_id = v.id
         INNER JOIN rutas r ON v.ruta_id = r.id
         LEFT JOIN rutas_paradas rp ON rp.id = b.parada_id
+        LEFT JOIN terminales suc ON suc.id = b.sucursal_id
         
         -- Fix: Unir con vehiculos usando el bus_id del viaje
         LEFT JOIN vehiculos veh ON v.bus_id = veh.id
@@ -83,6 +91,14 @@ if (!$ticket) {
 }
 
 // 4. Data Formatting
+// Empresa desde Configuracion (antes el ticket imprimia datos de ejemplo: BUSDRIVER, NIT 1234567890)
+$db->query("SELECT clave, valor FROM configuracion_sistema WHERE clave IN ('empresa_nombre', 'empresa_nit')");
+$empresaCfg = [];
+foreach ($db->resultSet() as $fila) {
+    $empresaCfg[$fila->clave] = $fila->valor;
+}
+$empresaTicket = ['nombre' => $empresaCfg['empresa_nombre'] ?? SITENAME, 'nit' => $empresaCfg['empresa_nit'] ?? ''];
+
 $nombre_completo = strtoupper($ticket->nombres . ' ' . $ticket->apellidos);
 $origen = strtoupper($ticket->origen);
 $destino = strtoupper($ticket->destino);
@@ -210,10 +226,14 @@ if (!empty($ticket->chofer_nombres)) {
     <div class="container">
         <!-- HEADER -->
         <div class="header text-center">
-            <div class="logo-placeholder">BUSDRIVER TRANSPORTE</div>
-            <div>NIT: 1234567890</div>
-            <div>Av. Principal #123, Terminal de Buses</div>
-            <div>Tel: +591 2 222222</div>
+            <div class="logo-placeholder"><?php echo htmlspecialchars(strtoupper($empresaTicket['nombre'])); ?></div>
+            <?php if ($empresaTicket['nit']): ?><div>NIT: <?php echo htmlspecialchars($empresaTicket['nit']); ?></div><?php endif; ?>
+            <?php if (!empty($ticket->sucursal_nombre)): ?>
+                <div>SUCURSAL <?php echo htmlspecialchars(strtoupper($ticket->sucursal_nombre)); ?></div>
+                <div><?php echo htmlspecialchars($ticket->sucursal_direccion); ?></div>
+                <?php if (!empty($ticket->sucursal_telefono)): ?><div>Tel: <?php echo htmlspecialchars($ticket->sucursal_telefono); ?></div><?php endif; ?>
+            <?php endif; ?>
+            <div>BOLETO <?php echo htmlspecialchars($ticket->codigo_boleto); ?></div>
         </div>
 
         <!-- INFO VIAJE -->
@@ -255,6 +275,10 @@ if (!empty($ticket->chofer_nombres)) {
         <div class="info-row" style="align-items: center;">
             <span class="bold">TOTAL PAGADO:</span>
             <span class="total-box">Bs. <?php echo $precio; ?></span>
+        </div>
+        <div class="info-row" style="font-size: 10px;">
+            <span>PAGO: <?php echo ($ticket->metodo_pago ?? 'EFECTIVO') === 'QR' ? 'QR' : 'EFECTIVO'; ?></span>
+            <?php if (!empty($ticket->referencia_pago)): ?><span>OP: <?php echo htmlspecialchars($ticket->referencia_pago); ?></span><?php endif; ?>
         </div>
         <div class="uppercase text-center" style="font-size: 9px; margin-top: 2px;">
             (Son: <?php echo $precio; ?> Bolivianos)

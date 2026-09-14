@@ -21,6 +21,50 @@ class ConfiguracionModel
         return $config;
     }
 
+    /**
+     * Datos del cobro QR para una sucursal: usa el QR propio de la sucursal si lo
+     * tiene y, si no, el QR general del dueño. Devuelve null si el cobro QR esta
+     * desactivado o no hay ninguna imagen cargada.
+     */
+    public function obtenerPagoQr($sucursalId = null)
+    {
+        $config = $this->obtenerConfiguracion();
+        if (empty($config['pago_qr_activo'])) {
+            return null;
+        }
+
+        $imagen = $config['pago_qr_imagen'] ?? '';
+        $titular = $config['pago_qr_titular'] ?? '';
+        $entidad = $config['pago_qr_entidad'] ?? '';
+        $origen = 'general';
+
+        if ($sucursalId) {
+            $this->db->query("SELECT pago_qr_imagen, pago_qr_titular, pago_qr_entidad FROM terminales WHERE id = :id");
+            $this->db->bind(':id', $sucursalId);
+            $suc = $this->db->single();
+            if ($suc && !empty($suc->pago_qr_imagen)) {
+                $imagen = $suc->pago_qr_imagen;
+                $titular = $suc->pago_qr_titular ?: $titular;
+                $entidad = $suc->pago_qr_entidad ?: $entidad;
+                $origen = 'sucursal';
+            }
+        }
+
+        if ($imagen === '') {
+            return null;
+        }
+
+        return [
+            'imagen_ruta' => $imagen,
+            'imagen' => URLROOT . '/' . $imagen,
+            'titular' => $titular,
+            'entidad' => $entidad,
+            'instrucciones' => $config['pago_qr_instrucciones'] ?? '',
+            'minutos' => max(3, (int) ($config['pago_qr_minutos'] ?? 15)),
+            'origen' => $origen,
+        ];
+    }
+
     // Guardar o actualizar una configuración
     public function guardarConfiguracion($datos)
     {

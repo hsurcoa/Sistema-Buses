@@ -179,10 +179,8 @@
     </div>
 </div>
 
-<!-- Fabric.js para renderizado de buses -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-<!-- BusRenderer Component -->
-<script src="<?php echo URLROOT; ?>/js/bus-renderer.js"></script>
+<!-- BusRenderer ya lo carga layouts/header.php (cargarlo dos veces lanzaba
+     "Identifier 'BusRenderer' has already been declared") -->
 
 <style>
     .hover-shadow {
@@ -203,11 +201,14 @@
         background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
         display: flex;
         justify-content: center;
-        align-items: center;
+        /* flex-start: con center, un bus mas alto que el recuadro se cortaba
+           arriba y no se podia desplazar hasta la primera fila */
+        align-items: flex-start;
     }
 
     #canvasBusPreview {
         display: block;
+        width: 100%;
         margin: 0 auto;
     }
 

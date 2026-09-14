@@ -565,13 +565,8 @@
        exclusivamente en public/css/custom.css para que sea consistente
        en todo el sistema, no solo en este dashboard. */
 
-    /* Ajuste Ergonómico del Dashboard (Centrado) */
-    .app-content .container-fluid {
-        max-width: 1600px;
-        /* Límite de ancho para pantallas gigantes */
-        margin: 0 auto;
-        /* Centrado horizontal */
-    }
+    /* (Sin tope de ancho: el dashboard usa todo el espacio disponible,
+       igual que el resto del sistema; ver public/css/custom.css) */
 
     /* 3. CORRECCIÓN TOTAL DE MODO OSCURO */
     body.dark-mode {

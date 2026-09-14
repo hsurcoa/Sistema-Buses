@@ -21,24 +21,23 @@
             --text-muted: #6c757d;
         }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-        }
-
-        .app-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 20px;
+        /* Contenedor de la pagina: ocupa todo el ancho junto al sidebar.
+           (Antes usaba .app-container/.app-header, que chocaban con las
+           clases del layout global: el titulo se montaba sobre la barra
+           superior y el contenido quedaba limitado a 1400px.) */
+        .vp-page {
+            width: 100%;
+            padding: 1.25rem 1.5rem 1.5rem;
         }
 
         /* Header con título e icono */
-        .app-header {
+        .vp-header {
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding: 0 10px;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
         }
 
         .page-title {
@@ -74,7 +73,7 @@
 
         /* BANNER CYAN SUPERIOR - Igual que en la imagen */
         .route-cyan-bar {
-            background: linear-gradient(135deg, var(--cyan-primary) 0%, var(--cyan-dark) 100%);
+            background: linear-gradient(135deg, var(--accent, #6366f1) 0%, var(--accent-dark, #4f46e5) 100%);
             color: white;
             padding: 12px 20px;
             border-radius: 8px;
@@ -82,7 +81,7 @@
             text-align: center;
             font-weight: 600;
             font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(0, 188, 212, 0.3);
+            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -93,99 +92,54 @@
             font-size: 1.1rem;
         }
 
-        /* LEYENDA HORIZONTAL - Exactamente como en la imagen */
-        .legend-bar {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 30px;
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            font-size: 0.875rem;
-            color: var(--text-dark);
-            font-weight: 500;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .dot-circle {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            display: inline-block;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
-        /* CONTENEDOR DEL BUS - Con borde azul redondeado como en la imagen */
-        .bus-container-wrapper {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        .bus-diagram-border {
-            border: 3px solid var(--blue-border);
-            border-radius: 12px;
-            padding: 30px 20px;
-            background: white;
-            min-height: 220px;
-            /* Se ajusta al contenido real (piso 1 y piso 2 casi nunca tienen la misma
-               cantidad de asientos/filas); antes quedaba un hueco vacío enorme en pisos
-               con menos filas porque el mínimo estaba fijo en 500px. */
-            transition: min-height 0.2s ease;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-        }
-
-        /* Canvas del bus */
-        .bus-viewport {
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 10px;
-        }
-
-        #canvasBus {
-            display: block;
-            margin: 0 auto;
-        }
-
-        /* PANEL DE CONTROL LATERAL - Diseño de la imagen */
-        .control-panel-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        /* TARJETAS PRINCIPALES (asientos / vender boleto) */
+        .vp-card {
+            background: var(--color-card-bg, #fff);
+            border-radius: 14px;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.05);
             overflow: hidden;
+            height: 100%;
         }
 
-        .panel-header {
-            background: #f8f9fa;
-            padding: 15px 20px;
-            border-bottom: 2px solid #dee2e6;
+        .vp-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.9rem 1.25rem;
+            border-bottom: 1px solid var(--color-border, #e5e7eb);
         }
 
-        .panel-header h5 {
+        .vp-card-header h5 {
             margin: 0;
             font-size: 1rem;
             font-weight: 700;
-            color: var(--text-dark);
+            color: var(--color-text, #212529);
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 0.5rem;
         }
 
-        .panel-body {
-            padding: 20px;
+        .vp-occupancy {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--color-text-muted, #6c757d);
+            white-space: nowrap;
+        }
+
+        .vp-card-body {
+            padding: 1.25rem;
+        }
+
+        /* Area del bus: se ajusta al contenido real (piso 1 y 2 casi nunca
+           tienen la misma cantidad de filas) */
+        .bus-viewport {
+            width: 100%;
+            min-height: 220px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            overflow-x: auto;
         }
 
         /* Sección de Ruta de Viaje */
@@ -194,7 +148,7 @@
             border-radius: 8px;
             padding: 12px 15px;
             margin-bottom: 20px;
-            border-left: 4px solid var(--cyan-primary);
+            border-left: 4px solid var(--accent, #6366f1);
         }
 
         .route-info-section label {
@@ -217,11 +171,11 @@
         /* DISPLAY DE ASIENTO - Grande y prominente como en la imagen */
         .seat-display-large {
             text-align: center;
-            margin: 20px 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            margin: 0 0 1.25rem;
+            padding: 1rem;
+            background: var(--accent-light, #eef2ff);
             border-radius: 12px;
-            border: 2px solid #dee2e6;
+            border: 1px solid #c7d2fe;
         }
 
         .seat-display-large label {
@@ -235,11 +189,10 @@
         }
 
         .seat-number-display {
-            font-size: 3.5rem;
+            font-size: 3rem;
             font-weight: 800;
-            color: var(--cyan-primary);
+            color: var(--accent-dark, #4f46e5);
             line-height: 1;
-            font-family: 'Arial Black', sans-serif;
         }
 
         /* Inputs del formulario */
@@ -355,9 +308,7 @@
 
         /* Tabs de pisos (si hay dos pisos) */
         .floor-tabs-container {
-            padding: 15px 20px;
-            background: #f8f9fa;
-            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 1rem;
         }
 
         .floor-tabs {
@@ -380,15 +331,15 @@
         }
 
         .floor-tab:hover {
-            border-color: var(--cyan-primary);
-            color: var(--cyan-primary);
+            border-color: var(--accent, #6366f1);
+            color: var(--accent, #6366f1);
         }
 
         .floor-tab.active {
-            background: var(--cyan-primary);
+            background: var(--accent, #6366f1);
             color: white;
-            border-color: var(--cyan-primary);
-            box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+            border-color: var(--accent, #6366f1);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
 
         /* Responsive */
@@ -415,12 +366,36 @@
             border-radius: 5px;
             font-size: 0.9rem;
         }
+
+        /* Modo oscuro (tema global: body.dark-mode, ver public/css/custom.css) */
+        body.dark-mode .vp-page .page-title,
+        body.dark-mode .form-group-custom label,
+        body.dark-mode .route-info-section .route-text {
+            color: var(--color-text);
+        }
+        body.dark-mode .route-info-section,
+        body.dark-mode .floor-tab {
+            background: #262626;
+            border-color: var(--color-border);
+        }
+        body.dark-mode .floor-tab { color: var(--color-text-muted); }
+        body.dark-mode .floor-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        body.dark-mode .seat-display-large {
+            background: rgba(99, 102, 241, 0.12);
+            border-color: rgba(129, 140, 248, 0.35);
+        }
+        body.dark-mode .seat-number-display { color: #a5b4fc; }
+        body.dark-mode .form-control-custom {
+            background-color: #1e1e1e;
+            border-color: var(--color-border);
+            color: var(--color-text);
+        }
     </style>
 
-    <div class="app-container">
+    <div class="vp-page">
 
         <!-- Header -->
-        <div class="app-header">
+        <div class="vp-header">
             <div class="page-title"><i class="fas fa-bus mr-2 text-primary"></i> Gestión de Pasajes</div>
             <ul class="nav modern-tabs" role="tablist">
                 <li class="nav-item">
@@ -633,68 +608,58 @@
                     </div>
                 </div>
 
-                <!-- Leyenda Horizontal -->
-                <div class="legend-bar">
-                    <div class="legend-item">
-                        <span class="dot-circle" style="background:#e0e0e0;"></span> Libre (Blanco)
-                    </div>
-                    <div class="legend-item">
-                        <span class="dot-circle" style="background:#ff9800;"></span> Reservado (Sin pagar)
-                    </div>
-                    <div class="legend-item">
-                        <span class="dot-circle" style="background:#4caf50;"></span> Vendido (Pagado)
-                    </div>
-                    <div class="legend-item">
-                        <span class="dot-circle" style="background:#f44336;"></span> No Disponible
-                    </div>
-                </div>
-
-                <div class="row">
-                    <!-- Columna Izquierda: Diagrama del Bus -->
-                    <div class="col-lg-8 mb-3">
-
-                        <div class="bus-container-wrapper">
-                            <!-- Floor Tabs (Hidden by default, shown when bus has 2 floors) -->
-                            <div id="floor-tabs-container" class="floor-tabs-container" style="display: none;">
-                                <div class="floor-tabs">
-                                    <div class="floor-tab active" data-floor="1" onclick="cambiarPiso(1)">
-                                        <i class="fas fa-layer-group"></i> Piso 1
-                                    </div>
-                                    <div class="floor-tab" data-floor="2" onclick="cambiarPiso(2)">
-                                        <i class="fas fa-layer-group"></i> Piso 2
+                <div class="row g-3">
+                    <!-- Columna Izquierda: Mapa de asientos -->
+                    <div class="col-lg-7 col-xxl-8">
+                        <div class="vp-card">
+                            <div class="vp-card-header">
+                                <h5><i class="fas fa-th"></i> Asientos</h5>
+                                <span class="vp-occupancy" id="lblOcupacion"></span>
+                            </div>
+                            <div class="vp-card-body">
+                                <!-- Pestañas de piso (solo buses de 2 pisos) -->
+                                <div id="floor-tabs-container" class="floor-tabs-container" style="display: none;">
+                                    <div class="floor-tabs">
+                                        <div class="floor-tab active" data-floor="1" onclick="cambiarPiso(1)">
+                                            <i class="fas fa-layer-group"></i> Piso 1
+                                        </div>
+                                        <div class="floor-tab" data-floor="2" onclick="cambiarPiso(2)">
+                                            <i class="fas fa-layer-group"></i> Piso 2
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- Diagrama del Bus con Borde Azul -->
-                            <div class="bus-diagram-border">
                                 <div id="contenedor-bus" class="bus-viewport">
                                     <div class="text-center text-muted align-self-center">
                                         <i class="fas fa-search-location fa-3x mb-3 opacity-25"></i>
                                         <p class="font-weight-600">Seleccione una ruta para cargar el bus</p>
                                     </div>
                                 </div>
+
+                                <!-- Leyenda -->
+                                <div class="seat-legend mt-2">
+                                    <span class="seat-legend-item"><span class="seat seat--libre"></span> Libre</span>
+                                    <span class="seat-legend-item"><span class="seat is-selected"></span> Seleccionado</span>
+                                    <span class="seat-legend-item"><span class="seat seat--reservado"></span> Reservado (sin pagar)</span>
+                                    <span class="seat-legend-item"><span class="seat seat--vendido"></span> Vendido</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Columna Derecha: Panel de Control -->
-                    <div class="col-lg-4">
-                        <div class="control-panel-card">
-                            <!-- Header del Panel -->
-                            <div class="panel-header">
-                                <h5>
-                                    <i class="fas fa-cog"></i> Panel de Control
-                                </h5>
+                    <!-- Columna Derecha: Vender boleto -->
+                    <div class="col-lg-5 col-xxl-4">
+                        <div class="vp-card">
+                            <div class="vp-card-header">
+                                <h5><i class="fas fa-ticket-alt"></i> Vender boleto</h5>
                             </div>
 
-                            <!-- Body del Panel -->
-                            <div class="panel-body">
+                            <div class="vp-card-body">
                                 <form id="formVenta">
                                     <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
                                     <input type="hidden" id="inputBoletoId">
 
-                                    <!-- Sección de Ruta de Viaje -->
+                                    <!-- Ruta de Viaje -->
                                     <div class="route-info-section">
                                         <label>Ruta de Viaje</label>
                                         <div class="route-text">
@@ -718,70 +683,73 @@
                                             <?php endforeach; ?>
                                         <?php endif; ?>
                                     </select>
+
+                                    <!-- Asiento seleccionado -->
+                                    <div class="seat-display-large">
+                                        <label>ASIENTO N°</label>
+                                        <div class="seat-number-display" id="displayAsiento">--</div>
+                                    </div>
+                                    <input type="hidden" id="inputAsiento">
+
+                                    <!-- Destino (paradas intermedias) -->
+                                    <div class="form-group-custom mb-3" id="container_paradas" style="display:none;">
+                                        <label><i class="fas fa-map-signs me-1"></i> Destino / Parada</label>
+                                        <select class="form-control-custom font-weight-bold text-primary" id="select_parada">
+                                            <option value="">Destino Final (Completo)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Precio -->
+                                    <div class="form-group-custom">
+                                        <label for="inputPrecio">Precio (Bs)</label>
+                                        <input type="number" class="form-control-custom font-weight-bold text-success text-center" style="font-size: 1.2rem;" id="inputPrecio" value="0.00" readonly>
+                                    </div>
+                                    <input type="hidden" id="precioBase">
+                                    <input type="hidden" id="viaje_id_venta">
+
+                                    <hr class="my-3">
+
+                                    <!-- Documento -->
+                                    <div class="form-group-custom">
+                                        <label for="inputDNI">Documento del pasajero</label>
+                                        <div class="input-with-icon">
+                                            <input type="text" class="form-control-custom" id="inputDNI" placeholder="DNI / CI / Pasaporte">
+                                            <i class="fas fa-search search-icon" onclick="buscarCliente()"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Nombres / Apellidos -->
+                                    <div class="name-fields-row">
+                                        <div class="form-group-custom">
+                                            <input type="text" class="form-control-custom" id="inputNombres" placeholder="Nombres" aria-label="Nombres">
+                                        </div>
+                                        <div class="form-group-custom">
+                                            <input type="text" class="form-control-custom" id="inputApellidos" placeholder="Apellidos" aria-label="Apellidos">
+                                        </div>
+                                    </div>
+
+                                    <!-- Celular -->
+                                    <div class="form-group-custom">
+                                        <div class="input-with-icon">
+                                            <input type="tel" class="form-control-custom" id="inputCelular" placeholder="Celular / WhatsApp (opcional)" aria-label="Celular">
+                                            <i class="fas fa-mobile-alt search-icon"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Acciones -->
+                                    <div class="action-buttons">
+                                        <button type="button" id="btnReservar" class="btn-reserve-yellow" onclick="procesarBoton(2)">
+                                            <i class="far fa-bookmark"></i> Reservar
+                                        </button>
+                                        <button type="button" id="btnCobrar" class="btn-sell-green" onclick="procesarBoton(1)">
+                                            <i class="fas fa-dollar-sign"></i> Cobrar y emitir
+                                        </button>
+                                    </div>
+                                    <p class="text-center text-muted small mt-2 mb-0">
+                                        <strong>Reservar</strong> guarda el asiento sin cobrar · <strong>Cobrar y emitir</strong> vende ahora
+                                    </p>
+                                </form>
                             </div>
-
-                            <!-- Display Grande de Asiento -->
-                            <div class="seat-display-large">
-                                <label>ASIENTO N°</label>
-                                <div class="seat-number-display" id="displayAsiento">11</div>
-                            </div>
-                            <input type="hidden" id="inputAsiento">
-
-                            <!-- Selector de Destino (Paradas Intermedias) -->
-                            <div class="form-group-custom mb-3" id="container_paradas" style="display:none;">
-                                <label class="text-sm text-muted font-weight-bold ml-1 mb-1"><i class="fas fa-map-signs mr-1"></i> Destino / Parada</label>
-                                <select class="form-control-custom font-weight-bold text-primary" id="select_parada">
-                                    <option value="">Destino Final (Completo)</option>
-                                    <!-- Las opciones se cargarán dinámicamente -->
-                                </select>
-                            </div>
-
-                            <!-- Campo DNI / CI / Pasaporte -->
-                            <div class="form-group-custom">
-                                <div class="input-with-icon">
-                                    <input type="text" class="form-control-custom" id="inputDNI" placeholder="DNI / CI / Pasaporte">
-                                    <i class="fas fa-search search-icon" onclick="buscarCliente()"></i>
-                                </div>
-                            </div>
-
-                            <!-- Campos de Nombre en dos columnas -->
-                            <div class="name-fields-row">
-                                <div class="form-group-custom">
-                                    <input type="text" class="form-control-custom" id="inputNombres" placeholder="Esteban">
-                                </div>
-                                <div class="form-group-custom">
-                                    <input type="text" class="form-control-custom" id="inputApellidos" placeholder="Arce">
-                                </div>
-                            </div>
-
-                            <!-- Campo Celular (Opcional) -->
-                            <div class="form-group-custom">
-                                <div class="input-with-icon">
-                                    <input type="tel" class="form-control-custom" id="inputCelular" placeholder="Celular / WhatsApp (Opcional)">
-                                    <i class="fas fa-mobile-alt search-icon" style="color: var(--cyan-primary);"></i>
-                                </div>
-                            </div>
-
-                            <!-- Campo de Precio (Visible) -->
-                            <div class="form-group-custom">
-                                <label class="text-sm text-muted font-weight-bold ml-1 mb-1">Costo Pasaje (Bs)</label>
-                                <input type="number" class="form-control-custom font-weight-bold text-success text-center" style="font-size: 1.2rem;" id="inputPrecio" value="0.00" readonly>
-                            </div>
-                            <input type="hidden" id="precioBase">
-
-                            <input type="hidden" id="viaje_id_venta"> <!-- Requerimiento Check -->
-
-                            <!-- Botones de Acción -->
-                            <div class="action-buttons">
-                                <button type="button" id="btnReservar" class="btn-reserve-yellow" onclick="procesarBoton(2)">
-                                    <i class="far fa-bookmark"></i> RESERVAR
-                                </button>
-                                <button type="button" id="btnCobrar" class="btn-sell-green" onclick="procesarBoton(1)">
-                                    <i class="fas fa-dollar-sign"></i> COBRAR Y EMITIR
-                                </button>
-                            </div>
-
-                            </form>
                         </div>
                     </div>
                 </div>
@@ -1046,6 +1014,30 @@
         <script>
             const URLROOT = '<?php echo URLROOT; ?>';
             const CSRF_TOKEN = '<?php echo $_SESSION['csrf_token'] ?? ''; ?>';
+            // Esta vista usa toastr, pero la libreria nunca se carga en el layout:
+            // cada aviso ("Asiento Ocupado", errores de carga...) lanzaba
+            // "toastr is not defined". Se muestran como toast de SweetAlert2.
+            if (typeof window.toastr === 'undefined') {
+                window.toastr = ['success', 'error', 'warning', 'info'].reduce((api, icon) => {
+                    api[icon] = (message, title) => {
+                        if (typeof Swal === 'undefined') {
+                            return console.warn(message);
+                        }
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon,
+                            title: title || message,
+                            text: title ? message : undefined,
+                            showConfirmButton: false,
+                            timer: 3000,
+                            timerProgressBar: true,
+                        });
+                    };
+                    return api;
+                }, {});
+            }
+
             let canvasBus = null;
             let asientoSeleccionado = null;
             let currentViajeId = null; // ID Global para evitar perdida de referencia
@@ -1359,6 +1351,7 @@
                 $('#txtDetalleVendidos').val('--');
                 $('#txtDetalleReservados').val('--');
                 $('#txtDetalleTotal').val('--');
+                $('#lblOcupacion').text('');
 
                 $.getJSON(`${URLROOT}/ventas/obtener_conteo_asientos/${id}?_=${new Date().getTime()}`, function(res) {
                     if (res.success) {
@@ -1377,6 +1370,7 @@
                         // Calcular total
                         const total = parseInt(d.libres) + parseInt(d.vendidos) + parseInt(d.reservados);
                         $('#txtDetalleTotal').val(total);
+                        $('#lblOcupacion').text(`${parseInt(d.vendidos) + parseInt(d.reservados)}/${total} ocupados`);
 
                         // Actualizar badge del boleto si se necesita
                         // console.log("Contadores actualizados:", d);

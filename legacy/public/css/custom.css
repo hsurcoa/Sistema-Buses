@@ -63,6 +63,10 @@ body.dark-mode {
     --header-bg: #171717;
     --bs-body-bg: #121212;
     --bs-body-color: #e5e7eb;
+    /* .text-muted / .text-body-secondary de Bootstrap quedaban oscuros sobre fondo oscuro */
+    --bs-secondary-color: rgba(229, 231, 235, 0.65);
+    --bs-emphasis-color: #f9fafb;
+    --bs-heading-color: #f3f4f6;
 }
 
 /* ===================== Base ===================== */
@@ -149,6 +153,9 @@ body.sidebar-collapsed .app-wrapper {
 .app-header-start,
 .app-header-end {
     display: flex;
+    /* .navbar-nav de Bootstrap fuerza columna: los botones y el usuario se
+       apilaban y el avatar se salia por debajo de la barra superior */
+    flex-direction: row;
     align-items: center;
     gap: 0.25rem;
     margin: 0;
@@ -426,11 +433,14 @@ body.sidebar-collapsed .app-sidebar:hover .nav-link { justify-content: flex-star
     flex: 1 1 auto;
 }
 
+/* Las vistas ocupan todo el ancho disponible junto al sidebar (antes habia
+   un tope de 1600px que, sumado a topes propios de cada vista, dejaba el
+   contenido angosto y centrado en pantallas anchas). */
 .app-content .container-fluid,
 .content-wrapper .container-fluid,
 .app-content-wrapper .container-fluid {
-    max-width: 1600px;
-    margin: 0 auto;
+    max-width: none;
+    width: 100%;
 }
 
 .app-footer {
@@ -458,6 +468,36 @@ body.sidebar-collapsed .app-sidebar:hover .nav-link { justify-content: flex-star
     border-bottom: 1px solid var(--color-border);
     font-weight: 600;
 }
+
+/* Patron AdminLTE usado por varias vistas: .card-title a la izquierda y
+   .card-tools a la derecha, en la misma linea */
+.card-header:has(> .card-tools) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.card-header .card-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+.card-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: auto;
+}
+.btn-tool {
+    padding: 0.25rem 0.5rem;
+    background: transparent;
+    border: 0;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+.btn-tool:hover { color: var(--color-text); }
 
 /* card-outline + card-{color}: borde superior de color (reemplazo AdminLTE) */
 .card-outline { border-top: 3px solid var(--color-border); }
@@ -513,3 +553,237 @@ body.dark-mode .form-select {
     border-color: var(--color-border);
     color: var(--color-text);
 }
+
+/* ===================== Mapa de asientos (bus) =====================
+   Dibujado por public/js/bus-renderer.js. Bus visto desde arriba:
+   frente (chofer / puerta), filas numeradas, pasillo punteado, asientos
+   con respaldo y ruedas. El tamaño de asiento (--seat) lo fija el JS
+   segun el ancho disponible. */
+.bus-map {
+    display: flex;
+    justify-content: center;
+    /* por si la vista fuerza display:block en el contenedor */
+    text-align: center;
+    width: 100%;
+    padding: 0.5rem 0 1.25rem;
+}
+
+.bus-body {
+    --seat: 48px;
+    --gap: calc(var(--seat) * 0.2);
+    --aisle: calc(var(--seat) * 0.75);
+    --row-label: calc(var(--seat) * 0.4);
+    --bus-bg: linear-gradient(180deg, #dfe6f1 0%, #cfd8e6 100%);
+    --bus-edge: #b9c5d8;
+    --bus-ink: #475569;
+    --bus-dash: #8a9ab3;
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    text-align: left;
+    padding: calc(var(--seat) * 0.35) calc(var(--seat) * 0.4) calc(var(--seat) * 0.55);
+    background: var(--bus-bg);
+    border: 2px solid var(--bus-edge);
+    /* frente mas redondeado que la parte trasera */
+    border-radius: calc(var(--seat) * 0.9) calc(var(--seat) * 0.9) calc(var(--seat) * 0.35) calc(var(--seat) * 0.35);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.6), 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* parabrisas */
+.bus-body::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 18%;
+    right: 18%;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(71, 85, 105, 0.22);
+}
+
+.bus-body--upper { border-radius: calc(var(--seat) * 0.5); }
+.bus-body--upper::before { display: none; }
+
+.bus-front {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.35rem 0.15rem 0.6rem;
+    margin-bottom: calc(var(--seat) * 0.3);
+    border-bottom: 2px dashed var(--bus-dash);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--bus-ink);
+    white-space: nowrap;
+}
+
+.bus-front-item { display: inline-flex; align-items: center; gap: 0.4rem; }
+.bus-front-item--muted { opacity: 0.6; }
+.bus-front-item .fas { font-size: 1rem; }
+
+.bus-front-tag {
+    padding: 0.1rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.7);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+}
+
+.bus-steering {
+    width: 1rem;
+    height: 1rem;
+    border: 3px solid var(--bus-ink);
+    border-radius: 50%;
+    position: relative;
+}
+.bus-steering::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 3px;
+    height: 3px;
+    background: var(--bus-ink);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.bus-grid {
+    display: grid;
+    column-gap: var(--gap);
+    row-gap: var(--gap);
+    align-items: center;
+}
+
+.bus-row-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--bus-ink);
+    opacity: 0.75;
+    text-align: center;
+}
+
+.bus-aisle {
+    justify-self: center;
+    align-self: stretch;
+    width: 0;
+    border-left: 2px dashed var(--bus-dash);
+}
+
+.bus-wheel {
+    position: absolute;
+    bottom: calc(var(--seat) * -0.22);
+    width: calc(var(--seat) * 0.45);
+    height: calc(var(--seat) * 0.45);
+    border-radius: 50%;
+    background: #1f2937;
+    border: 3px solid #374151;
+}
+.bus-wheel--left { left: calc(var(--seat) * 0.35); }
+.bus-wheel--right { right: calc(var(--seat) * 0.35); }
+
+/* ---- Asiento ---- */
+.seat {
+    --seat-bg: #ffffff;
+    --seat-back: #d6deeb;
+    --seat-border: #c3cedf;
+    --seat-ink: #334155;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    width: var(--seat);
+    height: var(--seat);
+    padding: 0 0 calc(var(--seat) * 0.12);
+    margin: 0;
+    background: var(--seat-bg);
+    border: 1.5px solid var(--seat-border);
+    border-radius: calc(var(--seat) * 0.22);
+    box-shadow: 0 2px 0 rgba(15, 23, 42, 0.08);
+    color: var(--seat-ink);
+    font: 700 calc(var(--seat) * 0.3) / 1 var(--font-main);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+    user-select: none;
+}
+
+/* respaldo */
+.seat::before {
+    content: "";
+    position: absolute;
+    top: calc(var(--seat) * 0.08);
+    left: calc(var(--seat) * 0.12);
+    right: calc(var(--seat) * 0.12);
+    height: calc(var(--seat) * 0.3);
+    background: var(--seat-back);
+    border-radius: calc(var(--seat) * 0.14) calc(var(--seat) * 0.14) calc(var(--seat) * 0.06) calc(var(--seat) * 0.06);
+}
+
+.seat-num { position: relative; }
+
+button.seat { cursor: pointer; }
+button.seat:hover:not([aria-disabled="true"]) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.16);
+    --seat-border: var(--accent);
+}
+button.seat:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.seat--reservado {
+    --seat-bg: #fef3c7;
+    --seat-back: #f59e0b;
+    --seat-border: #f59e0b;
+    --seat-ink: #92400e;
+}
+
+.seat--vendido {
+    --seat-bg: #475569;
+    --seat-back: #334155;
+    --seat-border: #334155;
+    --seat-ink: #ffffff;
+}
+button.seat--vendido { cursor: not-allowed; }
+
+.seat.is-selected {
+    --seat-bg: var(--accent);
+    --seat-back: var(--accent-dark);
+    --seat-border: var(--accent-dark);
+    --seat-ink: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3), 0 6px 14px rgba(79, 70, 229, 0.3);
+}
+
+/* ---- Leyenda (muestras con la misma forma de asiento) ---- */
+.seat-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1.25rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+.seat-legend-item { display: inline-flex; align-items: center; gap: 0.45rem; }
+.seat-legend .seat { --seat: 20px; box-shadow: none; pointer-events: none; }
+
+/* ---- Modo oscuro ---- */
+body.dark-mode .bus-body {
+    --bus-bg: linear-gradient(180deg, #2b3445 0%, #242c3b 100%);
+    --bus-edge: #3a4558;
+    --bus-ink: #cbd5e1;
+    --bus-dash: #5b6980;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+body.dark-mode .bus-front-tag { background: rgba(255, 255, 255, 0.08); }
+body.dark-mode .seat {
+    --seat-bg: #1e2533;
+    --seat-back: #334155;
+    --seat-border: #475569;
+    --seat-ink: #e2e8f0;
+}
+body.dark-mode .seat--reservado { --seat-bg: #45310b; --seat-back: #d97706; --seat-border: #d97706; --seat-ink: #fde68a; }
+body.dark-mode .seat--vendido { --seat-bg: #0f172a; --seat-back: #020617; --seat-border: #334155; --seat-ink: #94a3b8; }
+body.dark-mode .seat.is-selected { --seat-bg: var(--accent); --seat-back: var(--accent-dark); --seat-border: #a5b4fc; --seat-ink: #ffffff; }

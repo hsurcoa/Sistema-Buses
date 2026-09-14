@@ -1,362 +1,263 @@
 /**
- * BUS RENDERER - Componente Unificado para Renderizado de Buses
- * Usado en: Sistema de Ventas y Configuración de Tipos de Buses
- * Tecnología: Fabric.js Canvas
- * 
- * @author Sistema de Transporte
- * @version 2.0
+ * BUS RENDERER - Componente unificado para dibujar el mapa de asientos
+ * Usado en: Venta de pasajes y vista previa de Tipos de Buses.
+ *
+ * v3: HTML/CSS en vez de canvas (Fabric.js). El bus se dibuja como un bus
+ * visto desde arriba (frente con chofer y puerta, filas numeradas, pasillo,
+ * asientos con respaldo, ruedas), escala con el ancho disponible y cada
+ * asiento es un <button> accesible por teclado. Estilos: public/css/custom.css
+ * (seccion "Mapa de asientos").
+ *
+ * Interfaz compatible con la v2 (canvas):
+ *   new BusRenderer(id, { onSeatClick, readOnly })
+ *   initCanvas(width, height)   -> prepara el contenedor (reemplaza el <canvas id> por un <div id>)
+ *   renderBus(data, floor)
+ *   highlightSeat(seat)         -> seat = { data: { n, s, id }, el }
+ *   dispose()
  */
-
 class BusRenderer {
     constructor(canvasId, options = {}) {
         this.canvasId = canvasId;
         this.canvas = null;
+        this.root = null;
+        this.seats = [];
         this.currentFloor = 1;
         this.totalFloors = 1;
         this.onSeatClick = options.onSeatClick || null;
-        this.readOnly = options.readOnly || false; // Para preview sin interacción
-        
-        // Configuración de diseño
-        this.SEAT_WIDTH = 38;
-        this.SEAT_HEIGHT = 38;
-        this.SEAT_GAP = 8;
-        this.AISLE_GAP = 30;
+        this.readOnly = options.readOnly || false;
+
+        // Limites del tamaño de asiento (px); el tamaño real depende del ancho disponible
+        this.SEAT_MIN = 38;
+        this.SEAT_MAX = 60;
     }
 
     /**
-     * Inicializar canvas
+     * Prepara el contenedor. Si el elemento con ese id es un <canvas> (marcado
+     * de la v2), se reemplaza por un <div> con el mismo id para que el codigo
+     * existente que lo muestra/oculta por id siga funcionando.
      */
-    initCanvas(width, height) {
-        if (this.canvas) {
-            this.canvas.dispose();
+    initCanvas(width) {
+        let el = document.getElementById(this.canvasId);
+        if (!el) {
+            return null;
         }
 
-        this.canvas = new fabric.Canvas(this.canvasId, {
-            backgroundColor: 'transparent',
-            selection: false,
-            width: width,
-            height: height
-        });
+        if (el.tagName === 'CANVAS') {
+            const div = document.createElement('div');
+            div.id = this.canvasId;
+            div.style.cssText = el.style.cssText;
+            el.replaceWith(div);
+            el = div;
+        }
+
+        el.classList.add('bus-map');
+        el.innerHTML = '';
+        this.root = el;
+        this.width = width || el.parentElement?.clientWidth || 400;
+        this.seats = [];
+
+        const self = this;
+        this.canvas = {
+            element: el,
+            getObjects: () => self.seats,
+            renderAll: () => {},
+            dispose: () => self.dispose(),
+        };
 
         return this.canvas;
     }
 
     /**
-     * Renderizar bus completo
-     * @param {Object} data - Datos del bus (capacidad, pisos, asientos ocupados, etc.)
-     * @param {Number} floor - Piso a renderizar (1 o 2)
+     * Dibuja el piso indicado.
+     * @param {Object} data  Datos del viaje/tipo de bus (capacidad, layout_config, asientos_ocupados...)
+     * @param {Number} floor Piso a dibujar (1 o 2)
      */
     renderBus(data, floor = 1) {
-        console.log("🚌 BusRenderer.renderBus() - Iniciando renderizado");
-        console.log("  📦 Data recibida:", data);
-        console.log("  🏢 Piso a renderizar:", floor);
+        if (!this.root) {
+            this.initCanvas();
+        }
+        if (!this.root) {
+            return null;
+        }
 
         this.currentFloor = floor;
 
-        // Extraer configuración
         const config = data.layout_config || {};
-        const TOTAL_ASIENTOS = parseInt(data.asientos_total || data.capacidad || 40);
-        const PISOS = parseInt(config.pisos || data.pisos || 1);
-        const COLUMNAS = parseInt(config.columnas || 4);
-        const POS_PASILLO = parseInt(config.posicion_pasillo || 2);
+        const totalSeats = parseInt(data.asientos_total || data.capacidad || 40);
+        const floors = parseInt(config.pisos || data.pisos || 1);
+        const columns = Math.max(1, parseInt(config.columnas || 4));
+        const aisle = Math.min(Math.max(0, parseInt(config.posicion_pasillo ?? 2)), columns);
 
-        this.totalFloors = PISOS;
+        this.totalFloors = floors;
 
-        console.log("📊 BusRenderer - Configuración extraída:");
-        console.log("  - config object:", config);
-        console.log("  - TOTAL_ASIENTOS:", TOTAL_ASIENTOS, "(de:", data.asientos_total || data.capacidad || "default", ")");
-        console.log("  - PISOS:", PISOS, "(de:", config.pisos || data.pisos || "default", ")");
-        console.log("  - COLUMNAS:", COLUMNAS, "(de:", config.columnas || "default", ")");
-        console.log("  - POS_PASILLO:", POS_PASILLO, "(de:", config.posicion_pasillo || "default", ")");
-        console.log("  - distribucion:", config.distribucion);
-
-        // Calcular asientos a renderizar
-        const seatsToRender = this.calculateSeatsForFloor(TOTAL_ASIENTOS, PISOS, floor, config);
-        console.log("🎯 Asientos calculados para piso", floor, ":", seatsToRender.length, "asientos");
-        console.log("  - Rango:", seatsToRender[0], "-", seatsToRender[seatsToRender.length - 1]);
-
-        // Limpiar canvas
-        if (this.canvas) {
-            this.canvas.clear();
-        }
-
-        // Calcular dimensiones
-        const canvasWidth = this.canvas.width;
-        const startY = floor === 1 ? 50 : 20;
-
-        // Dibujar cabina (solo piso 1)
-        if (floor === 1) {
-            this.drawCabin(canvasWidth, COLUMNAS, startY);
-        }
-
-        // Dibujar asientos
+        const seatNumbers = this.calculateSeatsForFloor(totalSeats, floors, floor, config);
         const occupied = data.asientos_ocupados || [];
-        console.log("🔒 Asientos ocupados:", occupied.length);
-        let finalHeight = this.drawSeats(seatsToRender, occupied, canvasWidth, startY, COLUMNAS, POS_PASILLO);
+        const rows = Math.ceil(seatNumbers.length / columns);
 
-        // Ajustar altura del canvas
-        this.canvas.setHeight(finalHeight);
-        this.canvas.renderAll();
+        // Tamaño del asiento segun el ancho disponible (fila = numero + asientos + pasillo + margenes)
+        const available = Math.max(this.width - 24, 260);
+        const units = columns + 2.6;
+        const seatSize = Math.round(Math.min(this.SEAT_MAX, Math.max(this.SEAT_MIN, available / (units * 1.18))));
 
-        console.log("✅ BusRenderer.renderBus() - Renderizado completado");
+        this.root.innerHTML = '';
+        this.seats = [];
+
+        const body = document.createElement('div');
+        body.className = 'bus-body' + (floor > 1 ? ' bus-body--upper' : '');
+        body.style.setProperty('--seat', seatSize + 'px');
+        body.setAttribute('role', 'group');
+        body.setAttribute('aria-label', floors > 1 ? `Mapa de asientos, piso ${floor}` : 'Mapa de asientos');
+
+        body.appendChild(this.drawFront(floor, floors));
+
+        const grid = document.createElement('div');
+        grid.className = 'bus-grid';
+        // Columnas: nro de fila | asientos izquierda | pasillo | asientos derecha
+        const left = aisle;
+        const right = columns - aisle;
+        const templ = ['var(--row-label)'];
+        if (left) templ.push(`repeat(${left}, var(--seat))`);
+        if (right) templ.push('var(--aisle)', `repeat(${right}, var(--seat))`);
+        grid.style.gridTemplateColumns = templ.join(' ');
+        grid.style.gridTemplateRows = `repeat(${rows}, var(--seat))`;
+
+        for (let r = 0; r < rows; r++) {
+            const label = document.createElement('span');
+            label.className = 'bus-row-label';
+            label.textContent = r + 1;
+            label.style.gridRow = r + 1;
+            label.style.gridColumn = 1;
+            grid.appendChild(label);
+        }
+
+        if (left && right) {
+            const aisleLine = document.createElement('span');
+            aisleLine.className = 'bus-aisle';
+            aisleLine.style.gridColumn = left + 2;
+            aisleLine.style.gridRow = `1 / ${rows + 1}`;
+            aisleLine.setAttribute('aria-hidden', 'true');
+            grid.appendChild(aisleLine);
+        }
+
+        seatNumbers.forEach((num, index) => {
+            const col = index % columns;
+            const row = Math.floor(index / columns);
+            // +1 por la columna del numero de fila, +1 extra si ya paso el pasillo
+            const gridCol = col + 2 + (right && col >= aisle ? 1 : 0);
+
+            const o = occupied.find(x => parseInt(x.numero) === num);
+            let status = 'libre';
+            if (o) {
+                status = (o.estado === 'vendido' || o.estado === '1') ? 'vendido' : 'reservado';
+            }
+
+            const seat = this.createSeat(num, status, o || null);
+            seat.el.style.gridRow = row + 1;
+            seat.el.style.gridColumn = gridCol;
+            grid.appendChild(seat.el);
+            this.seats.push(seat);
+        });
+
+        body.appendChild(grid);
+
+        ['left', 'right'].forEach(side => {
+            const wheel = document.createElement('span');
+            wheel.className = `bus-wheel bus-wheel--${side}`;
+            wheel.setAttribute('aria-hidden', 'true');
+            body.appendChild(wheel);
+        });
+
+        this.root.appendChild(body);
         return this.canvas;
     }
 
-    /**
-     * Calcular qué asientos mostrar según el piso
-     */
+    /** Frente del bus: chofer y puerta en el piso 1; escalera en el piso 2. */
+    drawFront(floor, floors) {
+        const front = document.createElement('div');
+        front.className = 'bus-front';
+
+        if (floor === 1) {
+            front.innerHTML = `
+                <span class="bus-front-item"><span class="bus-steering" aria-hidden="true"></span> Chofer</span>
+                ${floors > 1 ? '<span class="bus-front-tag">Piso 1</span>' : ''}
+                <span class="bus-front-item">Puerta <i class="fas fa-door-open" aria-hidden="true"></i></span>`;
+        } else {
+            front.innerHTML = `
+                <span class="bus-front-item"><i class="fas fa-stairs" aria-hidden="true"></i> Escalera</span>
+                <span class="bus-front-tag">Piso ${floor}</span>
+                <span class="bus-front-item bus-front-item--muted">Frente</span>`;
+        }
+
+        return front;
+    }
+
+    /** Asientos que corresponden a cada piso (misma regla que la v2). */
     calculateSeatsForFloor(totalSeats, floors, currentFloor, config) {
         if (floors === 1) {
-            // Un solo piso: todos los asientos
             return Array.from({ length: totalSeats }, (_, i) => i + 1);
         }
 
-        // Dos pisos: distribuir
         const dist = config.distribucion || {};
-        
+        const piso1Seats = (dist.piso1?.normales || 0) + (dist.piso1?.premium || 0) || Math.ceil(totalSeats * 0.6);
+
         if (currentFloor === 1) {
-            // Piso 1: calcular desde configuración o 60%
-            const piso1Seats = (dist.piso1?.normales || 0) + (dist.piso1?.premium || 0) || Math.ceil(totalSeats * 0.6);
-            return Array.from({ length: piso1Seats }, (_, i) => i + 1);
-        } else {
-            // Piso 2: asientos restantes
-            const piso1Seats = (dist.piso1?.normales || 0) + (dist.piso1?.premium || 0) || Math.ceil(totalSeats * 0.6);
-            const piso2Seats = totalSeats - piso1Seats;
-            return Array.from({ length: piso2Seats }, (_, i) => piso1Seats + i + 1);
+            return Array.from({ length: Math.min(piso1Seats, totalSeats) }, (_, i) => i + 1);
+        }
+
+        const piso2Seats = Math.max(totalSeats - piso1Seats, 0);
+        return Array.from({ length: piso2Seats }, (_, i) => piso1Seats + i + 1);
+    }
+
+    createSeat(num, status, occupiedInfo) {
+        const interactive = !this.readOnly && this.onSeatClick;
+        const el = document.createElement(interactive ? 'button' : 'div');
+        el.className = `seat seat--${status}`;
+
+        const labels = { libre: 'Libre', reservado: 'Reservado', vendido: 'Vendido' };
+        el.title = `Asiento ${num} · ${labels[status]}`;
+        el.setAttribute('aria-label', `Asiento ${num}, ${labels[status]}`);
+        el.innerHTML = `<span class="seat-num">${num}</span>`;
+
+        const seat = {
+            el,
+            data: { n: num, s: status, id: occupiedInfo ? occupiedInfo.id : null },
+        };
+
+        if (interactive) {
+            el.type = 'button';
+            if (status === 'vendido') {
+                el.setAttribute('aria-disabled', 'true');
+            }
+            el.addEventListener('click', () => this.onSeatClick(seat));
+        }
+
+        return seat;
+    }
+
+    highlightSeat(seat) {
+        this.seats.forEach(s => this.resetSeatStyle(s));
+        if (seat && seat.el) {
+            seat.el.classList.add('is-selected');
+            seat.el.setAttribute('aria-pressed', 'true');
         }
     }
 
-    /**
-     * Dibujar cabina del conductor
-     */
-    drawCabin(canvasWidth, columns, startY) {
-        const panelW = (columns * 50) + 80;
-        const centerX = canvasWidth / 2;
-        const startX = centerX - (panelW / 2);
-
-        // Panel de cabina
-        const cabina = new fabric.Rect({
-            left: startX,
-            top: 10,
-            width: panelW,
-            height: startY - 15,
-            fill: '#e2e8f0',
-            stroke: '#cbd5e1',
-            strokeWidth: 1,
-            rx: 8,
-            ry: 8,
-            selectable: false
-        });
-
-        // Texto "CABINA"
-        const txtCabina = new fabric.Text("CABINA", {
-            fontSize: 10,
-            fill: '#64748b',
-            fontWeight: '700',
-            left: centerX,
-            top: 22,
-            originX: 'center',
-            selectable: false
-        });
-
-        // Volante
-        const wheel = new fabric.Circle({
-            radius: 10,
-            fill: 'transparent',
-            stroke: '#94a3b8',
-            strokeWidth: 2,
-            left: startX + panelW - 35,
-            top: 20,
-            selectable: false
-        });
-
-        this.canvas.add(cabina, txtCabina, wheel);
-    }
-
-    /**
-     * Dibujar todos los asientos
-     */
-    drawSeats(seatsToRender, occupied, canvasWidth, startY, columns, aislePosition) {
-        let finalHeight = startY;
-
-        seatsToRender.forEach((seatNum, index) => {
-            const colIndex = index % columns;
-            const rowIndex = Math.floor(index / columns);
-
-            // Calcular posición
-            const blockW = (columns * (this.SEAT_WIDTH + this.SEAT_GAP)) + this.AISLE_GAP - this.SEAT_GAP;
-            const offsetX = (canvasWidth - blockW) / 2;
-
-            let marginX = colIndex >= aislePosition ? this.AISLE_GAP : 0;
-            let left = offsetX + (colIndex * (this.SEAT_WIDTH + this.SEAT_GAP)) + marginX;
-            let top = startY + (rowIndex * (this.SEAT_HEIGHT + this.SEAT_GAP));
-
-            // Determinar estado
-            let status = 'libre';
-            let occupiedInfo = null;
-
-            const o = occupied.find(x => parseInt(x.numero) === seatNum);
-            if (o) {
-                status = (o.estado === 'vendido' || o.estado === '1') ? 'vendido' : 'reservado';
-                occupiedInfo = o;
-            }
-
-            // Crear asiento
-            const seatObj = this.createSeat(left, top, seatNum, status, occupiedInfo);
-            
-            // Agregar evento click si no es read-only
-            if (!this.readOnly && this.onSeatClick) {
-                seatObj.on('mousedown', () => this.onSeatClick(seatObj));
-            }
-
-            this.canvas.add(seatObj);
-            finalHeight = top + this.SEAT_HEIGHT + 30;
-        });
-
-        return finalHeight;
-    }
-
-    /**
-     * Crear objeto de asiento
-     */
-    createSeat(x, y, num, status, occupiedInfo) {
-        let fill = '#ffffff';
-        let stroke = '#cbd5e1';
-        let txtColor = '#64748b';
-
-        if (status === 'vendido') {
-            fill = '#d1fae5'; // Verde claro
-            stroke = '#10b981'; // Verde
-            txtColor = '#065f46'; // Verde oscuro
-        } else if (status === 'reservado') {
-            fill = '#fcd34d'; // Amarillo
-            stroke = '#f59e0b'; // Naranja
-            txtColor = '#78350f'; // Marrón
+    resetSeatStyle(seat) {
+        if (seat && seat.el) {
+            seat.el.classList.remove('is-selected');
+            seat.el.removeAttribute('aria-pressed');
         }
-
-        // Rectángulo del asiento
-        const rect = new fabric.Rect({
-            width: this.SEAT_WIDTH,
-            height: this.SEAT_HEIGHT,
-            rx: 8,
-            ry: 8,
-            fill: fill,
-            stroke: stroke,
-            strokeWidth: 2,
-            shadow: new fabric.Shadow({
-                color: 'rgba(0,0,0,0.1)',
-                blur: 4,
-                offsetX: 2,
-                offsetY: 2
-            }),
-            originX: 'center',
-            originY: 'center'
-        });
-
-        // Número del asiento
-        const text = new fabric.Text(String(num), {
-            fontSize: 14,
-            fontFamily: 'Arial',
-            fontWeight: 'bold',
-            fill: txtColor,
-            originX: 'center',
-            originY: 'center'
-        });
-
-        // Grupo (asiento completo)
-        return new fabric.Group([rect, text], {
-            left: x,
-            top: y,
-            hasControls: false,
-            lockMovementX: true,
-            lockMovementY: true,
-            hoverCursor: this.readOnly ? 'default' : 'pointer',
-            selectable: !this.readOnly,
-            data: {
-                n: num,
-                s: status,
-                id: occupiedInfo ? occupiedInfo.id : null
-            }
-        });
     }
 
-    /**
-     * Resaltar asiento seleccionado
-     */
-    highlightSeat(seatGroup) {
-        // Resetear todos los asientos
-        this.canvas.getObjects().forEach(o => {
-            if (o.type === 'group' && o.data) {
-                this.resetSeatStyle(o);
-            }
-        });
-
-        // Resaltar el seleccionado
-        if (seatGroup && seatGroup.data) {
-            seatGroup.item(0).set({
-                fill: '#10b981',
-                stroke: '#059669',
-                shadow: new fabric.Shadow({
-                    color: 'rgba(16, 185, 129, 0.4)',
-                    blur: 8,
-                    offsetX: 0,
-                    offsetY: 4
-                })
-            });
-            seatGroup.item(1).set({
-                fill: '#ffffff'
-            });
-        }
-
-        this.canvas.renderAll();
-    }
-
-    /**
-     * Resetear estilo de asiento a su estado original
-     */
-    resetSeatStyle(seatGroup) {
-        const status = seatGroup.data.s;
-        let fill = '#ffffff';
-        let stroke = '#cbd5e1';
-        let txtColor = '#64748b';
-
-        if (status === 'vendido') {
-            fill = '#d1fae5';
-            stroke = '#10b981';
-            txtColor = '#065f46';
-        } else if (status === 'reservado') {
-            fill = '#fcd34d';
-            stroke = '#f59e0b';
-            txtColor = '#78350f';
-        }
-
-        seatGroup.item(0).set({
-            fill: fill,
-            stroke: stroke,
-            shadow: new fabric.Shadow({
-                color: 'rgba(0,0,0,0.1)',
-                blur: 4,
-                offsetX: 2,
-                offsetY: 2
-            })
-        });
-        seatGroup.item(1).set({
-            fill: txtColor
-        });
-    }
-
-    /**
-     * Destruir canvas
-     */
     dispose() {
-        if (this.canvas) {
-            this.canvas.dispose();
-            this.canvas = null;
+        if (this.root) {
+            this.root.innerHTML = '';
         }
+        this.seats = [];
+        this.canvas = null;
     }
 }
 
-// Exportar para uso global
 if (typeof window !== 'undefined') {
     window.BusRenderer = BusRenderer;
 }

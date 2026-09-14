@@ -36,3 +36,7 @@ tmp_laravel/
 
 # Claude Code
 .claude/scheduled_tasks.lock
+
+# Logs de errores generados por el legacy
+legacy/debug_errors.log
+*.log

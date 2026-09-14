@@ -37,7 +37,35 @@
             justify-content: space-between;
             align-items: center;
             gap: 0.75rem;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        /* Panel de venta fijo mientras se recorre el mapa (pantallas anchas) */
+        @media (min-width: 992px) {
+            .vp-card--sticky {
+                position: sticky;
+                top: calc(var(--header-height, 64px) + 12px);
+                height: auto;
+            }
+        }
+
+        /* Ruta + asiento en una fila; destino + precio en otra */
+        .sale-summary {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .fare-row {
+            display: grid;
+            /* el destino ("Destino Final: X (25.00 Bs)") necesita mas ancho que el precio */
+            grid-template-columns: minmax(0, 1fr) 120px;
+            gap: 0 10px;
+        }
+
+        @media (max-width: 575.98px) {
+            .fare-row { grid-template-columns: 1fr; }
         }
 
         .page-title {
@@ -75,9 +103,9 @@
         .route-cyan-bar {
             background: linear-gradient(135deg, var(--accent, #6366f1) 0%, var(--accent-dark, #4f46e5) 100%);
             color: white;
-            padding: 12px 20px;
+            padding: 8px 20px;
             border-radius: 8px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             text-align: center;
             font-weight: 600;
             font-size: 1rem;
@@ -128,14 +156,14 @@
         }
 
         .vp-card-body {
-            padding: 1.25rem;
+            padding: 1rem 1.25rem;
         }
 
         /* Area del bus: se ajusta al contenido real (piso 1 y 2 casi nunca
            tienen la misma cantidad de filas) */
         .bus-viewport {
             width: 100%;
-            min-height: 220px;
+            min-height: 200px;
             display: flex;
             justify-content: center;
             align-items: flex-start;
@@ -146,8 +174,8 @@
         .route-info-section {
             background: #f8f9fa;
             border-radius: 8px;
-            padding: 12px 15px;
-            margin-bottom: 20px;
+            padding: 8px 12px;
+            margin-bottom: 0;
             border-left: 4px solid var(--accent, #6366f1);
         }
 
@@ -171,8 +199,9 @@
         /* DISPLAY DE ASIENTO - Grande y prominente como en la imagen */
         .seat-display-large {
             text-align: center;
-            margin: 0 0 1.25rem;
-            padding: 1rem;
+            min-width: 108px;
+            margin: 0;
+            padding: 8px 14px;
             background: var(--accent-light, #eef2ff);
             border-radius: 12px;
             border: 1px solid #c7d2fe;
@@ -184,12 +213,12 @@
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 10px;
+            margin-bottom: 4px;
             display: block;
         }
 
         .seat-number-display {
-            font-size: 3rem;
+            font-size: 2.1rem;
             font-weight: 800;
             color: var(--accent-dark, #4f46e5);
             line-height: 1;
@@ -197,20 +226,20 @@
 
         /* Inputs del formulario */
         .form-group-custom {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
 
         .form-group-custom label {
             font-size: 0.75rem;
             font-weight: 700;
             color: var(--text-dark);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             display: block;
         }
 
         .form-control-custom {
             width: 100%;
-            padding: 10px 12px;
+            padding: 8px 12px;
             border: 1px solid #ced4da;
             border-radius: 6px;
             font-size: 0.9rem;
@@ -219,8 +248,8 @@
 
         .form-control-custom:focus {
             outline: none;
-            border-color: var(--cyan-primary);
-            box-shadow: 0 0 0 3px rgba(0, 188, 212, 0.1);
+            border-color: var(--accent, #6366f1);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
 
         .input-with-icon {
@@ -251,15 +280,15 @@
         .action-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 25px;
+            gap: 10px;
+            margin-top: 12px;
         }
 
         .btn-reserve-yellow {
             background: var(--yellow-reserve);
             color: white;
             border: none;
-            padding: 14px 20px;
+            padding: 11px 16px;
             border-radius: 8px;
             font-weight: 700;
             font-size: 0.9rem;
@@ -282,7 +311,7 @@
             background: var(--green-button);
             color: white;
             border: none;
-            padding: 14px 20px;
+            padding: 11px 16px;
             border-radius: 8px;
             font-weight: 700;
             font-size: 0.9rem;
@@ -427,10 +456,160 @@
             <!-- MAPA DE ASIENTOS - Diseño según imagen de referencia -->
             <div class="tab-pane fade show active" id="tab-mapa">
 
+                <div class="row g-3">
+                    <!-- Columna Izquierda: Mapa de asientos -->
+                    <div class="col-lg-7 col-xxl-8">
+                        <div class="vp-card">
+                            <div class="vp-card-header">
+                                <h5><i class="fas fa-th"></i> Asientos</h5>
+                                <span class="vp-occupancy" id="lblOcupacion"></span>
+                            </div>
+                            <div class="vp-card-body">
+                                <!-- Pestañas de piso (solo buses de 2 pisos) -->
+                                <div id="floor-tabs-container" class="floor-tabs-container" style="display: none;">
+                                    <div class="floor-tabs">
+                                        <div class="floor-tab active" data-floor="1" onclick="cambiarPiso(1)">
+                                            <i class="fas fa-layer-group"></i> Piso 1
+                                        </div>
+                                        <div class="floor-tab" data-floor="2" onclick="cambiarPiso(2)">
+                                            <i class="fas fa-layer-group"></i> Piso 2
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="contenedor-bus" class="bus-viewport">
+                                    <div class="text-center text-muted align-self-center">
+                                        <i class="fas fa-search-location fa-3x mb-3 opacity-25"></i>
+                                        <p class="font-weight-600">Seleccione una ruta para cargar el bus</p>
+                                    </div>
+                                </div>
+
+                                <!-- Leyenda -->
+                                <div class="seat-legend mt-2">
+                                    <span class="seat-legend-item"><span class="seat seat--libre"></span> Libre</span>
+                                    <span class="seat-legend-item"><span class="seat is-selected"></span> Seleccionado</span>
+                                    <span class="seat-legend-item"><span class="seat seat--reservado"></span> Reservado (sin pagar)</span>
+                                    <span class="seat-legend-item"><span class="seat seat--vendido"></span> Vendido</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Vender boleto -->
+                    <div class="col-lg-5 col-xxl-4">
+                        <div class="vp-card vp-card--sticky">
+                            <div class="vp-card-header">
+                                <h5><i class="fas fa-ticket-alt"></i> Vender boleto</h5>
+                            </div>
+
+                            <div class="vp-card-body">
+                                <form id="formVenta">
+                                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                                    <input type="hidden" id="inputBoletoId">
+
+                                    <div class="sale-summary">
+                                        <!-- Ruta de Viaje -->
+                                        <div class="route-info-section">
+                                            <label>Ruta de Viaje</label>
+                                            <div class="route-text">
+                                                <i class="fas fa-bus"></i>
+                                                <span id="selected-route-display">Seleccione una ruta</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Asiento seleccionado -->
+                                        <div class="seat-display-large">
+                                            <label>Asiento N°</label>
+                                            <div class="seat-number-display" id="displayAsiento">--</div>
+                                        </div>
+                                    </div>
+                                    <input type="hidden" id="inputAsiento">
+
+                                    <!-- Selector de Ruta (Oculto visualmente pero funcional) -->
+                                    <select class="form-control-custom" id="select_viaje" style="display: none;">
+                                        <option value="">-- Seleccionar --</option>
+                                        <?php if (isset($data['viajesProgramados'])): ?>
+                                            <?php foreach ($data['viajesProgramados'] as $viaje): ?>
+                                                <option value="<?php echo $viaje->id; ?>"
+                                                    data-precio="<?php echo $viaje->precio_base ?? 0; ?>"
+                                                    data-origen="<?php echo htmlspecialchars($viaje->origen ?? ''); ?>"
+                                                    data-destino="<?php echo htmlspecialchars($viaje->destino ?? ''); ?>"
+                                                    data-hora="<?php echo $viaje->hora_salida; ?>">
+                                                    <?php echo htmlspecialchars($viaje->origen . ' - ' . $viaje->destino . ' | ' . $viaje->hora_salida); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </select>
+
+                                    <div class="fare-row">
+                                    <!-- Destino (paradas intermedias) -->
+                                    <div class="form-group-custom" id="container_paradas" style="display:none;">
+                                        <label><i class="fas fa-map-signs me-1"></i> Destino / Parada</label>
+                                        <select class="form-control-custom font-weight-bold text-primary" id="select_parada">
+                                            <option value="">Destino Final (Completo)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Precio -->
+                                    <div class="form-group-custom">
+                                        <label for="inputPrecio">Precio (Bs)</label>
+                                        <input type="number" class="form-control-custom font-weight-bold text-success text-center" style="font-size: 1.1rem;" id="inputPrecio" value="0.00" readonly>
+                                    </div>
+                                    </div>
+                                    <input type="hidden" id="precioBase">
+                                    <input type="hidden" id="viaje_id_venta">
+
+                                    <hr class="my-2">
+
+                                    <!-- Documento -->
+                                    <div class="form-group-custom">
+                                        <label for="inputDNI">Documento del pasajero</label>
+                                        <div class="input-with-icon">
+                                            <input type="text" class="form-control-custom" id="inputDNI" placeholder="DNI / CI / Pasaporte">
+                                            <i class="fas fa-search search-icon" onclick="buscarCliente()"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Nombres / Apellidos -->
+                                    <div class="name-fields-row">
+                                        <div class="form-group-custom">
+                                            <input type="text" class="form-control-custom" id="inputNombres" placeholder="Nombres" aria-label="Nombres">
+                                        </div>
+                                        <div class="form-group-custom">
+                                            <input type="text" class="form-control-custom" id="inputApellidos" placeholder="Apellidos" aria-label="Apellidos">
+                                        </div>
+                                    </div>
+
+                                    <!-- Celular -->
+                                    <div class="form-group-custom">
+                                        <div class="input-with-icon">
+                                            <input type="tel" class="form-control-custom" id="inputCelular" placeholder="Celular / WhatsApp (opcional)" aria-label="Celular">
+                                            <i class="fas fa-mobile-alt search-icon"></i>
+                                        </div>
+                                    </div>
+
+                                    <!-- Acciones -->
+                                    <div class="action-buttons">
+                                        <button type="button" id="btnReservar" class="btn-reserve-yellow" onclick="procesarBoton(2)">
+                                            <i class="far fa-bookmark"></i> Reservar
+                                        </button>
+                                        <button type="button" id="btnCobrar" class="btn-sell-green" onclick="procesarBoton(1)">
+                                            <i class="fas fa-dollar-sign"></i> Cobrar y emitir
+                                        </button>
+                                    </div>
+                                    <p class="text-center text-muted small mt-2 mb-0">
+                                        <strong>Reservar</strong> guarda el asiento sin cobrar · <strong>Cobrar y emitir</strong> vende ahora
+                                    </p>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ======================================================= -->
-                <!-- PANELES INFORMATIVOS (ACCORDION CARDS) - MOVED TO TOP   -->
+                <!-- PANELES INFORMATIVOS (ACCORDION CARDS) - debajo del mapa -->
                 <!-- ======================================================= -->
-                <div class="row mb-3">
+                <div class="row mt-3">
                     <div class="col-12">
 
                         <!-- PANEL 1: DESCRIPCIÓN -->
@@ -608,151 +787,6 @@
                     </div>
                 </div>
 
-                <div class="row g-3">
-                    <!-- Columna Izquierda: Mapa de asientos -->
-                    <div class="col-lg-7 col-xxl-8">
-                        <div class="vp-card">
-                            <div class="vp-card-header">
-                                <h5><i class="fas fa-th"></i> Asientos</h5>
-                                <span class="vp-occupancy" id="lblOcupacion"></span>
-                            </div>
-                            <div class="vp-card-body">
-                                <!-- Pestañas de piso (solo buses de 2 pisos) -->
-                                <div id="floor-tabs-container" class="floor-tabs-container" style="display: none;">
-                                    <div class="floor-tabs">
-                                        <div class="floor-tab active" data-floor="1" onclick="cambiarPiso(1)">
-                                            <i class="fas fa-layer-group"></i> Piso 1
-                                        </div>
-                                        <div class="floor-tab" data-floor="2" onclick="cambiarPiso(2)">
-                                            <i class="fas fa-layer-group"></i> Piso 2
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div id="contenedor-bus" class="bus-viewport">
-                                    <div class="text-center text-muted align-self-center">
-                                        <i class="fas fa-search-location fa-3x mb-3 opacity-25"></i>
-                                        <p class="font-weight-600">Seleccione una ruta para cargar el bus</p>
-                                    </div>
-                                </div>
-
-                                <!-- Leyenda -->
-                                <div class="seat-legend mt-2">
-                                    <span class="seat-legend-item"><span class="seat seat--libre"></span> Libre</span>
-                                    <span class="seat-legend-item"><span class="seat is-selected"></span> Seleccionado</span>
-                                    <span class="seat-legend-item"><span class="seat seat--reservado"></span> Reservado (sin pagar)</span>
-                                    <span class="seat-legend-item"><span class="seat seat--vendido"></span> Vendido</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Columna Derecha: Vender boleto -->
-                    <div class="col-lg-5 col-xxl-4">
-                        <div class="vp-card">
-                            <div class="vp-card-header">
-                                <h5><i class="fas fa-ticket-alt"></i> Vender boleto</h5>
-                            </div>
-
-                            <div class="vp-card-body">
-                                <form id="formVenta">
-                                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
-                                    <input type="hidden" id="inputBoletoId">
-
-                                    <!-- Ruta de Viaje -->
-                                    <div class="route-info-section">
-                                        <label>Ruta de Viaje</label>
-                                        <div class="route-text">
-                                            <i class="fas fa-bus"></i>
-                                            <span id="selected-route-display">Seleccione una ruta</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Selector de Ruta (Oculto visualmente pero funcional) -->
-                                    <select class="form-control-custom" id="select_viaje" style="display: none;">
-                                        <option value="">-- Seleccionar --</option>
-                                        <?php if (isset($data['viajesProgramados'])): ?>
-                                            <?php foreach ($data['viajesProgramados'] as $viaje): ?>
-                                                <option value="<?php echo $viaje->id; ?>"
-                                                    data-precio="<?php echo $viaje->precio_base ?? 0; ?>"
-                                                    data-origen="<?php echo htmlspecialchars($viaje->origen ?? ''); ?>"
-                                                    data-destino="<?php echo htmlspecialchars($viaje->destino ?? ''); ?>"
-                                                    data-hora="<?php echo $viaje->hora_salida; ?>">
-                                                    <?php echo htmlspecialchars($viaje->origen . ' - ' . $viaje->destino . ' | ' . $viaje->hora_salida); ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </select>
-
-                                    <!-- Asiento seleccionado -->
-                                    <div class="seat-display-large">
-                                        <label>ASIENTO N°</label>
-                                        <div class="seat-number-display" id="displayAsiento">--</div>
-                                    </div>
-                                    <input type="hidden" id="inputAsiento">
-
-                                    <!-- Destino (paradas intermedias) -->
-                                    <div class="form-group-custom mb-3" id="container_paradas" style="display:none;">
-                                        <label><i class="fas fa-map-signs me-1"></i> Destino / Parada</label>
-                                        <select class="form-control-custom font-weight-bold text-primary" id="select_parada">
-                                            <option value="">Destino Final (Completo)</option>
-                                        </select>
-                                    </div>
-
-                                    <!-- Precio -->
-                                    <div class="form-group-custom">
-                                        <label for="inputPrecio">Precio (Bs)</label>
-                                        <input type="number" class="form-control-custom font-weight-bold text-success text-center" style="font-size: 1.2rem;" id="inputPrecio" value="0.00" readonly>
-                                    </div>
-                                    <input type="hidden" id="precioBase">
-                                    <input type="hidden" id="viaje_id_venta">
-
-                                    <hr class="my-3">
-
-                                    <!-- Documento -->
-                                    <div class="form-group-custom">
-                                        <label for="inputDNI">Documento del pasajero</label>
-                                        <div class="input-with-icon">
-                                            <input type="text" class="form-control-custom" id="inputDNI" placeholder="DNI / CI / Pasaporte">
-                                            <i class="fas fa-search search-icon" onclick="buscarCliente()"></i>
-                                        </div>
-                                    </div>
-
-                                    <!-- Nombres / Apellidos -->
-                                    <div class="name-fields-row">
-                                        <div class="form-group-custom">
-                                            <input type="text" class="form-control-custom" id="inputNombres" placeholder="Nombres" aria-label="Nombres">
-                                        </div>
-                                        <div class="form-group-custom">
-                                            <input type="text" class="form-control-custom" id="inputApellidos" placeholder="Apellidos" aria-label="Apellidos">
-                                        </div>
-                                    </div>
-
-                                    <!-- Celular -->
-                                    <div class="form-group-custom">
-                                        <div class="input-with-icon">
-                                            <input type="tel" class="form-control-custom" id="inputCelular" placeholder="Celular / WhatsApp (opcional)" aria-label="Celular">
-                                            <i class="fas fa-mobile-alt search-icon"></i>
-                                        </div>
-                                    </div>
-
-                                    <!-- Acciones -->
-                                    <div class="action-buttons">
-                                        <button type="button" id="btnReservar" class="btn-reserve-yellow" onclick="procesarBoton(2)">
-                                            <i class="far fa-bookmark"></i> Reservar
-                                        </button>
-                                        <button type="button" id="btnCobrar" class="btn-sell-green" onclick="procesarBoton(1)">
-                                            <i class="fas fa-dollar-sign"></i> Cobrar y emitir
-                                        </button>
-                                    </div>
-                                    <p class="text-center text-muted small mt-2 mb-0">
-                                        <strong>Reservar</strong> guarda el asiento sin cobrar · <strong>Cobrar y emitir</strong> vende ahora
-                                    </p>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
 
 
@@ -1089,53 +1123,56 @@
                 console.log("  - PISOS:", PISOS);
                 console.log("  - Piso actual:", currentFloor);
 
-                // Show/Hide floor tabs
+                // Todos los pisos se muestran juntos en una sola vista: las pestañas
+                // de piso ya no hacen falta.
                 totalFloors = PISOS;
-                if (PISOS > 1) {
-                    console.log("✅ Mostrando tabs de pisos (bus de 2 pisos)");
-                    $('#floor-tabs-container').show();
-                } else {
-                    console.log("ℹ️ Ocultando tabs de pisos (bus de 1 piso)");
-                    $('#floor-tabs-container').hide();
-                    currentFloor = 1;
-                }
+                currentFloor = 1;
+                $('#floor-tabs-container').hide();
 
                 // Preparar contenedor
                 const contenedor = document.getElementById('contenedor-bus');
                 contenedor.innerHTML = '';
+                const host = document.createElement('div');
+                host.id = 'canvasBus';
+                contenedor.appendChild(host);
 
-                // Crear canvas
-                const canvas = document.createElement('canvas');
-                canvas.id = 'canvasBus';
-                contenedor.appendChild(canvas);
-
-                // Calcular ancho del canvas
-                const canvasWidth = Math.max(contenedor.clientWidth, 350);
-
-                // Inicializar BusRenderer si no existe
                 if (!busRendererInstance) {
-                    console.log("🔧 Creando nueva instancia de BusRenderer");
                     busRendererInstance = new BusRenderer('canvasBus', {
-                        readOnly: false, // Permitir interacción
-                        onSeatClick: clickAsiento // Callback para clicks
+                        readOnly: false,
+                        onSeatClick: clickAsiento
                     });
                 }
 
-                // Inicializar canvas
-                busRendererInstance.initCanvas(canvasWidth, 900);
+                busRendererInstance.initCanvas(Math.max(contenedor.clientWidth, 280));
+                busRendererInstance.renderAllFloors(data, { maxHeight: altoDisponibleBus(contenedor) });
 
-                // Renderizar bus
-                console.log("🎨 Llamando a busRendererInstance.renderBus() con:", {
-                    data,
-                    currentFloor
-                });
-                busRendererInstance.renderBus(data, currentFloor);
+                // Conservar el asiento elegido al redibujar (cambio de tamaño, recarga de estados)
+                if (asientoSeleccionado) {
+                    const seat = busRendererInstance.findSeat(asientoSeleccionado);
+                    if (seat && seat.data.s !== 'vendido') {
+                        busRendererInstance.highlightSeat(seat);
+                    }
+                }
 
-                // Guardar referencia global para compatibilidad
                 canvasBus = busRendererInstance.canvas;
-
-                console.log("✅ Renderizado completado");
             }
+
+            // Alto que puede ocupar el bus sin obligar a desplazarse: desde donde
+            // empieza el mapa hasta el borde inferior de la ventana (menos la leyenda).
+            function altoDisponibleBus(contenedor) {
+                const top = contenedor.getBoundingClientRect().top + window.scrollY;
+                return Math.max(window.innerHeight - top - 70, 380);
+            }
+
+            let resizeBusTimer = null;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeBusTimer);
+                resizeBusTimer = setTimeout(function() {
+                    if (currentBusData && $('#tab-mapa').hasClass('active')) {
+                        renderizarBusModerno(currentBusData);
+                    }
+                }, 150);
+            });
 
             // Función de click en asiento (compatible con BusRenderer)
             function clickAsiento(seatGroup) {

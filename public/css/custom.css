@@ -565,11 +565,20 @@ body.dark-mode .form-select {
     /* por si la vista fuerza display:block en el contenedor */
     text-align: center;
     width: 100%;
-    padding: 0.5rem 0 1.25rem;
+    padding: 0.25rem 0 1rem;
+}
+
+/* Contenedor de uno o varios pisos (lado a lado; se apilan si no caben) */
+.bus-floors {
+    --seat: 44px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1rem;
 }
 
 .bus-body {
-    --seat: 48px;
     --gap: calc(var(--seat) * 0.2);
     --aisle: calc(var(--seat) * 0.75);
     --row-label: calc(var(--seat) * 0.4);
@@ -608,11 +617,12 @@ body.dark-mode .form-select {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.35rem 0.15rem 0.6rem;
+    gap: 0.4rem;
+    padding: 0.25rem 0.15rem 0.45rem;
     margin-bottom: calc(var(--seat) * 0.3);
     border-bottom: 2px dashed var(--bus-dash);
-    font-size: 0.78rem;
+    /* escala con el asiento para que el frente no fije un ancho minimo al bus */
+    font-size: max(10px, calc(var(--seat) * 0.26));
     font-weight: 600;
     color: var(--bus-ink);
     white-space: nowrap;
@@ -620,13 +630,13 @@ body.dark-mode .form-select {
 
 .bus-front-item { display: inline-flex; align-items: center; gap: 0.4rem; }
 .bus-front-item--muted { opacity: 0.6; }
-.bus-front-item .fas { font-size: 1rem; }
+.bus-front-item .fas { font-size: 1.2em; }
 
 .bus-front-tag {
-    padding: 0.1rem 0.6rem;
+    padding: 0.1rem 0.5rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.7);
-    font-size: 0.7rem;
+    font-size: 0.92em;
     font-weight: 700;
     letter-spacing: 0.3px;
 }

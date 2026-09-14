@@ -11,7 +11,8 @@
  * Interfaz compatible con la v2 (canvas):
  *   new BusRenderer(id, { onSeatClick, readOnly })
  *   initCanvas(width, height)   -> prepara el contenedor (reemplaza el <canvas id> por un <div id>)
- *   renderBus(data, floor)
+ *   renderBus(data, floor, { maxHeight })   -> un piso
+ *   renderAllFloors(data, { maxHeight })    -> todos los pisos lado a lado
  *   highlightSeat(seat)         -> seat = { data: { n, s, id }, el }
  *   dispose()
  */
@@ -27,8 +28,8 @@ class BusRenderer {
         this.readOnly = options.readOnly || false;
 
         // Limites del tamaño de asiento (px); el tamaño real depende del ancho disponible
-        this.SEAT_MIN = 38;
-        this.SEAT_MAX = 60;
+        this.SEAT_MIN = 30;
+        this.SEAT_MAX = 52;
     }
 
     /**
@@ -68,11 +69,25 @@ class BusRenderer {
     }
 
     /**
-     * Dibuja el piso indicado.
+     * Dibuja UN piso (vista con pestañas, p. ej. la vista previa de Tipos de Buses).
      * @param {Object} data  Datos del viaje/tipo de bus (capacidad, layout_config, asientos_ocupados...)
      * @param {Number} floor Piso a dibujar (1 o 2)
+     * @param {Object} opts  { maxHeight } alto maximo en px para el bus (opcional)
      */
-    renderBus(data, floor = 1) {
+    renderBus(data, floor = 1, opts = {}) {
+        return this.render(data, [floor], opts);
+    }
+
+    /**
+     * Dibuja TODOS los pisos lado a lado en una sola vista (venta de pasajes).
+     * Si no caben a lo ancho con un tamaño de asiento legible, se apilan.
+     */
+    renderAllFloors(data, opts = {}) {
+        const layout = this.parseLayout(data);
+        return this.render(data, Array.from({ length: layout.floors }, (_, i) => i + 1), opts);
+    }
+
+    render(data, floorsToShow, opts = {}) {
         if (!this.root) {
             this.initCanvas();
         }
@@ -80,35 +95,121 @@ class BusRenderer {
             return null;
         }
 
-        this.currentFloor = floor;
+        const layout = this.parseLayout(data);
+        this.totalFloors = layout.floors;
+        this.currentFloor = floorsToShow[0];
 
+        const perFloor = floorsToShow.map(floor => {
+            const numbers = this.calculateSeatsForFloor(layout.totalSeats, layout.floors, floor, layout.config);
+            return { floor, numbers, rows: Math.ceil(numbers.length / layout.columns) };
+        });
+
+        let seatSize = this.fitSeatSize(layout, perFloor, opts.maxHeight);
+        const draw = size => {
+            this.root.innerHTML = '';
+            this.seats = [];
+
+            const wrap = document.createElement('div');
+            wrap.className = 'bus-floors' + (perFloor.length > 1 ? ' bus-floors--multi' : '');
+            wrap.style.setProperty('--seat', size + 'px');
+            perFloor.forEach(f => wrap.appendChild(this.buildFloor(data, layout, f)));
+            this.root.appendChild(wrap);
+            return wrap;
+        };
+
+        let wrap = draw(seatSize);
+
+        // La estimacion de fitSeatSize es aproximada (bordes, textos del frente,
+        // tipografia): se mide lo realmente dibujado y se corrige hasta 4 veces
+        // para que los pisos quepan lado a lado y dentro del alto disponible.
+        for (let i = 0; i < 4; i++) {
+            const corrected = this.correctSeatSize(wrap, seatSize, opts.maxHeight);
+            if (!corrected || corrected === seatSize) {
+                break;
+            }
+            seatSize = corrected;
+            wrap = draw(seatSize);
+        }
+
+        return this.canvas;
+    }
+
+    correctSeatSize(wrap, seatSize, maxHeight) {
+        const bodies = [...wrap.children];
+        if (!bodies.length || !this.root.isConnected) {
+            return null;
+        }
+
+        const available = this.root.clientWidth || this.width;
+        const gap = parseFloat(getComputedStyle(wrap).columnGap) || 0;
+        const totalWidth = bodies.reduce((sum, b) => sum + b.offsetWidth, 0) + gap * (bodies.length - 1);
+        const tallest = Math.max(...bodies.map(b => b.offsetHeight));
+
+        let scale = (available - 2) / totalWidth;
+        if (maxHeight) {
+            scale = Math.min(scale, maxHeight / tallest);
+        }
+
+        const target = Math.floor(seatSize * Math.min(scale, 1.25));
+        // Lado a lado ilegible: se deja que se apilen con el tamaño por ancho de un solo bus
+        if (bodies.length > 1 && target < this.SEAT_MIN) {
+            const single = Math.floor(seatSize * available / Math.max(...bodies.map(b => b.offsetWidth)));
+            return Math.max(this.SEAT_MIN, Math.min(this.SEAT_MAX, single));
+        }
+
+        const clamped = Math.max(this.SEAT_MIN, Math.min(this.SEAT_MAX, target));
+        // Evita redibujar por diferencias de 1px
+        return Math.abs(clamped - seatSize) >= 2 || totalWidth > available ? clamped : seatSize;
+    }
+
+    parseLayout(data) {
         const config = data.layout_config || {};
-        const totalSeats = parseInt(data.asientos_total || data.capacidad || 40);
-        const floors = parseInt(config.pisos || data.pisos || 1);
         const columns = Math.max(1, parseInt(config.columnas || 4));
-        const aisle = Math.min(Math.max(0, parseInt(config.posicion_pasillo ?? 2)), columns);
+        return {
+            config,
+            totalSeats: parseInt(data.asientos_total || data.capacidad || 40),
+            floors: Math.max(1, parseInt(config.pisos || data.pisos || 1)),
+            columns,
+            aisle: Math.min(Math.max(0, parseInt(config.posicion_pasillo ?? 2)), columns),
+        };
+    }
 
-        this.totalFloors = floors;
+    /**
+     * Tamaño de asiento que hace caber el bus en el ancho del contenedor y,
+     * si se indica, en el alto disponible (para no tener que desplazarse).
+     * Medidas en unidades de asiento, segun los estilos de custom.css:
+     *   ancho de un bus = s * (1.2 * columnas + 2.15)
+     *   alto de un bus  = s * (1.2 * filas + 1.0) + ~40px (frente)
+     */
+    fitSeatSize(layout, perFloor, maxHeight) {
+        const available = Math.max((this.width || 400) - 8, 240);
+        const gapBetween = 16;
+        const busUnitsW = 1.2 * layout.columns + 2.15;
+        const maxRows = Math.max(...perFloor.map(f => f.rows), 1);
 
-        const seatNumbers = this.calculateSeatsForFloor(totalSeats, floors, floor, config);
+        const byWidthSideBySide = (available - gapBetween * (perFloor.length - 1)) / perFloor.length / busUnitsW;
+        // Si lado a lado quedarian demasiado chicos, se apilan: el ancho deja de ser la limitante
+        const sideBySide = byWidthSideBySide >= this.SEAT_MIN;
+        let size = sideBySide ? byWidthSideBySide : available / busUnitsW;
+
+        if (maxHeight && sideBySide) {
+            size = Math.min(size, (maxHeight - 40) / (1.2 * maxRows + 1.0));
+        }
+
+        return Math.round(Math.min(this.SEAT_MAX, Math.max(this.SEAT_MIN, size)));
+    }
+
+    buildFloor(data, layout, f) {
+        const { columns, aisle, floors } = layout;
         const occupied = data.asientos_ocupados || [];
-        const rows = Math.ceil(seatNumbers.length / columns);
-
-        // Tamaño del asiento segun el ancho disponible (fila = numero + asientos + pasillo + margenes)
-        const available = Math.max(this.width - 24, 260);
-        const units = columns + 2.6;
-        const seatSize = Math.round(Math.min(this.SEAT_MAX, Math.max(this.SEAT_MIN, available / (units * 1.18))));
-
-        this.root.innerHTML = '';
-        this.seats = [];
 
         const body = document.createElement('div');
-        body.className = 'bus-body' + (floor > 1 ? ' bus-body--upper' : '');
-        body.style.setProperty('--seat', seatSize + 'px');
+        body.className = 'bus-body' + (f.floor > 1 ? ' bus-body--upper' : '');
         body.setAttribute('role', 'group');
-        body.setAttribute('aria-label', floors > 1 ? `Mapa de asientos, piso ${floor}` : 'Mapa de asientos');
+        const range = f.numbers.length ? ` (asientos ${f.numbers[0]} a ${f.numbers[f.numbers.length - 1]})` : '';
+        body.setAttribute('aria-label', floors > 1 ? `Piso ${f.floor}${range}` : 'Mapa de asientos');
 
-        body.appendChild(this.drawFront(floor, floors));
+        body.appendChild(this.drawFront(f.floor, floors, f.numbers));
 
         const grid = document.createElement('div');
         grid.className = 'bus-grid';
@@ -119,9 +220,9 @@ class BusRenderer {
         if (left) templ.push(`repeat(${left}, var(--seat))`);
         if (right) templ.push('var(--aisle)', `repeat(${right}, var(--seat))`);
         grid.style.gridTemplateColumns = templ.join(' ');
-        grid.style.gridTemplateRows = `repeat(${rows}, var(--seat))`;
+        grid.style.gridTemplateRows = `repeat(${f.rows}, var(--seat))`;
 
-        for (let r = 0; r < rows; r++) {
+        for (let r = 0; r < f.rows; r++) {
             const label = document.createElement('span');
             label.className = 'bus-row-label';
             label.textContent = r + 1;
@@ -130,16 +231,16 @@ class BusRenderer {
             grid.appendChild(label);
         }
 
-        if (left && right) {
+        if (left && right && f.rows) {
             const aisleLine = document.createElement('span');
             aisleLine.className = 'bus-aisle';
             aisleLine.style.gridColumn = left + 2;
-            aisleLine.style.gridRow = `1 / ${rows + 1}`;
+            aisleLine.style.gridRow = `1 / ${f.rows + 1}`;
             aisleLine.setAttribute('aria-hidden', 'true');
             grid.appendChild(aisleLine);
         }
 
-        seatNumbers.forEach((num, index) => {
+        f.numbers.forEach((num, index) => {
             const col = index % columns;
             const row = Math.floor(index / columns);
             // +1 por la columna del numero de fila, +1 extra si ya paso el pasillo
@@ -160,31 +261,42 @@ class BusRenderer {
 
         body.appendChild(grid);
 
-        ['left', 'right'].forEach(side => {
-            const wheel = document.createElement('span');
-            wheel.className = `bus-wheel bus-wheel--${side}`;
-            wheel.setAttribute('aria-hidden', 'true');
-            body.appendChild(wheel);
-        });
+        if (f.floor === 1) {
+            ['left', 'right'].forEach(side => {
+                const wheel = document.createElement('span');
+                wheel.className = `bus-wheel bus-wheel--${side}`;
+                wheel.setAttribute('aria-hidden', 'true');
+                body.appendChild(wheel);
+            });
+        }
 
-        this.root.appendChild(body);
-        return this.canvas;
+        return body;
+    }
+
+    /** Selecciona un asiento por numero (p. ej. para conservar la seleccion al redibujar). */
+    findSeat(num) {
+        return this.seats.find(s => s.data.n === parseInt(num)) || null;
     }
 
     /** Frente del bus: chofer y puerta en el piso 1; escalera en el piso 2. */
-    drawFront(floor, floors) {
+    drawFront(floor, floors, numbers = []) {
         const front = document.createElement('div');
         front.className = 'bus-front';
+
+        const range = numbers.length ? `${numbers[0]}–${numbers[numbers.length - 1]}` : '';
+        const tag = floors > 1
+            ? `<span class="bus-front-tag" title="Asientos ${range}">Piso ${floor}${range ? ` · ${range}` : ''}</span>`
+            : '';
 
         if (floor === 1) {
             front.innerHTML = `
                 <span class="bus-front-item"><span class="bus-steering" aria-hidden="true"></span> Chofer</span>
-                ${floors > 1 ? '<span class="bus-front-tag">Piso 1</span>' : ''}
+                ${tag}
                 <span class="bus-front-item">Puerta <i class="fas fa-door-open" aria-hidden="true"></i></span>`;
         } else {
             front.innerHTML = `
                 <span class="bus-front-item"><i class="fas fa-stairs" aria-hidden="true"></i> Escalera</span>
-                <span class="bus-front-tag">Piso ${floor}</span>
+                ${tag}
                 <span class="bus-front-item bus-front-item--muted">Frente</span>`;
         }
 

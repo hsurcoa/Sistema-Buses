@@ -205,7 +205,14 @@ body.sidebar-collapsed .app-wrapper {
 
 /* ===================== Sidebar ===================== */
 .app-sidebar {
-    position: relative;
+    /* Fijo a la altura de la ventana: antes era una celda mas de la grilla,
+       se desplazaba con la pagina (desaparecian el logo y el menu) y dejaba una
+       columna oscura vacia del alto de todo el contenido. */
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    height: 100dvh;
     background-color: var(--sidebar-bg);
     color: var(--sidebar-text);
     display: flex;
@@ -275,10 +282,14 @@ body.sidebar-collapsed .app-wrapper {
 
 .sidebar-wrapper {
     flex: 1 1 auto;
+    min-height: 0; /* permite el scroll interno dentro del flex */
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain; /* el scroll del menu no arrastra la pagina */
     padding-bottom: 1.5rem;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
+.sidebar-wrapper::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); }
 
 .sidebar-menu { padding: 0.5rem 0.75rem; margin: 0; list-style: none; }
 
@@ -797,3 +808,27 @@ body.dark-mode .seat {
 body.dark-mode .seat--reservado { --seat-bg: #45310b; --seat-back: #d97706; --seat-border: #d97706; --seat-ink: #fde68a; }
 body.dark-mode .seat--vendido { --seat-bg: #0f172a; --seat-back: #020617; --seat-border: #334155; --seat-ink: #94a3b8; }
 body.dark-mode .seat.is-selected { --seat-bg: var(--accent); --seat-back: var(--accent-dark); --seat-border: #a5b4fc; --seat-ink: #ffffff; }
+
+/* ---- Modo oscuro: utilidades de Bootstrap con color fijo usadas en las vistas ----
+   (texto .text-dark sobre fondo oscuro quedaba invisible; .bg-white/.bg-light
+   dejaban bloques blancos) */
+body.dark-mode .text-dark,
+body.dark-mode .text-body { color: var(--color-text) !important; }
+body.dark-mode .text-secondary { color: var(--color-text-muted) !important; }
+body.dark-mode .bg-white,
+body.dark-mode .card-header.bg-white { background-color: var(--color-card-bg) !important; }
+body.dark-mode .bg-light { background-color: #262626 !important; color: var(--color-text); }
+body.dark-mode .input-group-text { background-color: #262626; border-color: var(--color-border); color: var(--color-text-muted); }
+body.dark-mode .form-control::placeholder { color: var(--color-text-muted); opacity: 0.8; }
+body.dark-mode .table { --bs-table-bg: transparent; --bs-table-hover-bg: rgba(255, 255, 255, 0.04); border-color: var(--color-border); }
+body.dark-mode .table > :not(caption) > * > * { border-bottom-color: var(--color-border); }
+body.dark-mode thead.bg-light,
+body.dark-mode .table-light { --bs-table-bg: #262626; --bs-table-color: var(--color-text-muted); }
+body.dark-mode .alert-warning { background-color: #3a2e12; border-color: #5c4a1c; color: #f5d98b; }
+body.dark-mode .alert-info { background-color: #10303a; border-color: #1d4d5c; color: #9fd8e8; }
+body.dark-mode .alert-secondary,
+body.dark-mode .alert-light { background-color: #262626; border-color: var(--color-border); color: var(--color-text); }
+body.dark-mode .btn-light { background-color: #2a2a2a; border-color: var(--color-border); color: var(--color-text); }
+body.dark-mode .rounded-circle.bg-light { background-color: #2a2a2a !important; }
+body.dark-mode .modal-content,
+body.dark-mode .dropdown-menu { background-color: var(--color-card-bg); color: var(--color-text); border-color: var(--color-border); }

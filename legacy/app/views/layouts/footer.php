@@ -13,6 +13,62 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!--end::SweetAlert2 JS-->
 
+    <!--begin::Sesion expirada (aviso global)-->
+    <script>
+        // Si la sesion vence con la pantalla abierta, cualquier peticion AJAX
+        // recibe 401 + code SESSION_EXPIRED (ver legacy/public/index.php). En vez
+        // de un error generico, se ofrece volver a iniciar sesion.
+        (function() {
+            let avisado = false;
+
+            function avisarSesionExpirada(redirect) {
+                if (avisado) return;
+                avisado = true;
+                const destino = redirect || '<?php echo URLROOT; ?>/login.php';
+                if (typeof Swal === 'undefined') {
+                    window.location.href = destino;
+                    return;
+                }
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Su sesión expiró',
+                    text: 'Por seguridad debe iniciar sesión nuevamente. Los datos no guardados de esta pantalla se perderán.',
+                    confirmButtonText: 'Iniciar sesión',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                }).then(() => { window.location.href = destino; });
+            }
+
+            function revisar(status, texto) {
+                if (status !== 401 || !texto) return;
+                try {
+                    const data = typeof texto === 'string' ? JSON.parse(texto) : texto;
+                    if (data && data.code === 'SESSION_EXPIRED') avisarSesionExpirada(data.redirect);
+                } catch (e) {}
+            }
+
+            if (window.jQuery) {
+                jQuery(document).ajaxComplete(function(_e, xhr) {
+                    revisar(xhr.status, xhr.responseText);
+                });
+            }
+
+            if (window.fetch) {
+                const fetchOriginal = window.fetch;
+                window.fetch = function() {
+                    return fetchOriginal.apply(this, arguments).then(function(res) {
+                        if (res.status === 401) {
+                            res.clone().text().then(t => revisar(401, t)).catch(() => {});
+                        }
+                        return res;
+                    });
+                };
+            }
+        })();
+    </script>
+    <!--end::Sesion expirada-->
+
+
     <!--begin::Sistema de Impresión de Tickets Térmicos-->
     <script src="<?php echo URLROOT; ?>/assets/js/impresion-ticket.js"></script>
     <!--end::Sistema de Impresión de Tickets Térmicos-->

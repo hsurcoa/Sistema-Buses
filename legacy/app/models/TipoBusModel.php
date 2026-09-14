@@ -12,6 +12,18 @@ class TipoBusModel
     /**
      * Listar todos los tipos de buses activos
      */
+    /**
+     * Tipos que se pueden asignar a un bus: los activos y ademas los inactivos
+     * que algun bus ya usa (si no, al editar ese bus su tipo desapareceria del select).
+     */
+    public function listarTiposParaFlota()
+    {
+        $this->db->query("SELECT * FROM tipos_buses
+                          WHERE estado = 1 OR id IN (SELECT tipo_bus_id FROM vehiculos WHERE tipo_bus_id IS NOT NULL)
+                          ORDER BY capacidad, nombre");
+        return $this->db->resultSet();
+    }
+
     public function listarTiposBuses()
     {
         $this->db->query("SELECT * FROM tipos_buses WHERE estado = 1 ORDER BY id DESC");

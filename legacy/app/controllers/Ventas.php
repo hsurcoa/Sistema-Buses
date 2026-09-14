@@ -47,9 +47,19 @@ class Ventas extends Controller
         // Obtener viajes programados
         $viajesProgramados = $this->rutaModel->listarViajesProgramados(50, 0);
 
+        $config = $this->model('ConfiguracionModel')->obtenerConfiguracion();
+
         $data = [
             'title' => 'Venta de Pasajes',
-            'viajesProgramados' => $viajesProgramados
+            'viajesProgramados' => $viajesProgramados,
+            // Cobro con QR (solo si un administrador lo activo y cargo la imagen)
+            'pago_qr' => (!empty($config['pago_qr_activo']) && !empty($config['pago_qr_imagen'])) ? [
+                'imagen' => URLROOT . '/' . $config['pago_qr_imagen'],
+                'titular' => $config['pago_qr_titular'] ?? '',
+                'entidad' => $config['pago_qr_entidad'] ?? '',
+                'instrucciones' => $config['pago_qr_instrucciones'] ?? '',
+                'minutos' => max(3, (int) ($config['pago_qr_minutos'] ?? 15)),
+            ] : null,
         ];
 
         $this->view('layouts/header', $data);
@@ -65,8 +75,8 @@ class Ventas extends Controller
     {
         // Obtener datos necesarios
         $rutas = $this->rutaModel->listarRutas(100, 0);
-        $tiposBuses = $this->tipoBusModel->listarTiposBuses();
-        $terminales = $this->terminalModel->listarTerminales();
+        // Incluye tipos inactivos que algun bus real sigue usando
+        $tiposBuses = $this->tipoBusModel->listarTiposParaFlota();
         $terminales = $this->terminalModel->listarTerminales();
         $viajesProgramados = $this->rutaModel->listarViajesProgramados(50, 0);
 
@@ -877,6 +887,34 @@ class Ventas extends Controller
      * Gestión de Boleto (Editar, Confirmar/Vender, Eliminar)
      * Responde a modalGestionBoleto
      */
+    /** Estado de un cobro (para la pantalla del pasajero y el modal del vendedor). */
+    public function estado_cobro($id)
+    {
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+
+        $this->rutaModel->liberarCobrosQrVencidos();
+        $cobro = $this->rutaModel->estadoCobroBoleto($id);
+        echo json_encode($cobro ? ['success' => true, 'data' => $cobro] : ['success' => false], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    /**
+     * Pantalla para el pasajero (segundo monitor): QR grande, monto y estado del
+     * pago. Se actualiza sola cuando el vendedor confirma o cancela el cobro.
+     */
+    public function pantalla_qr($id)
+    {
+        $config = $this->model('ConfiguracionModel')->obtenerConfiguracion();
+        $cobro = $this->rutaModel->estadoCobroBoleto($id);
+
+        $this->view('ventas/pantalla_qr', [
+            'cobro' => $cobro,
+            'config' => $config,
+        ]);
+    }
+
     public function gestion_boleto()
     {
         header('Content-Type: application/json');
@@ -942,12 +980,9 @@ class Ventas extends Controller
                     $res = $this->rutaModel->actualizarDatosBoleto($id, $nombres, $apellidos, $documento, $precio);
 
                     if ($accion == 'confirmar_venta') {
-                        // Cambiar estado a VENDIDO
-                        $this->rutaModel->cambiarEstadoBoleto($id, 'vendido');
+                        // Cobro en efectivo registrado en la caja abierta (antes solo cambiaba el estado)
+                        $ticketData = $this->rutaModel->confirmarPagoBoleto($id, SessionManager::getInstance()->getUserId(), 'EFECTIVO');
                         $msg = 'Venta confirmada exitosamente';
-
-                        // Obtener ticket para imprimir
-                        $ticketData = $this->rutaModel->obtenerDatosTicket($id);
                         echo json_encode(['success' => true, 'mensaje' => $msg, 'ticket' => $ticketData]);
                     } else {
                         echo json_encode(['success' => true, 'mensaje' => 'Datos actualizados correctamente']);

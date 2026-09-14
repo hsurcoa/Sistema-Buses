@@ -19,6 +19,70 @@ class Configuracion extends Controller
         $this->view('configuracion/index', $datos);
     }
 
+    /**
+     * QR de cobro del dueño. Solo el rol Administrador puede cambiarlo: si un
+     * vendedor pudiera reemplazarlo por su propio QR, desviaria los pagos.
+     */
+    public function guardar_qr()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . URLROOT . '/configuracion');
+            exit;
+        }
+
+        $session = SessionManager::getInstance();
+        if (!$session->verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+            header('Location: ' . URLROOT . '/configuracion?msg=csrf');
+            exit;
+        }
+        if (($_SESSION['rol'] ?? '') !== 'Administrador') {
+            header('Location: ' . URLROOT . '/configuracion?msg=qr_sin_permiso');
+            exit;
+        }
+
+        $actual = $this->configModel->obtenerConfiguracion();
+        $datos = [
+            'pago_qr_titular' => mb_substr(trim($_POST['pago_qr_titular'] ?? ''), 0, 120),
+            'pago_qr_entidad' => mb_substr(trim($_POST['pago_qr_entidad'] ?? ''), 0, 120),
+            'pago_qr_instrucciones' => mb_substr(trim($_POST['pago_qr_instrucciones'] ?? ''), 0, 300),
+            'pago_qr_minutos' => (string) min(60, max(3, (int) ($_POST['pago_qr_minutos'] ?? 15))),
+        ];
+
+        if (!empty($_FILES['pago_qr_imagen']['name'])) {
+            $archivo = $_FILES['pago_qr_imagen'];
+            $info = @getimagesize($archivo['tmp_name']);
+            $tipos = [IMAGETYPE_PNG => 'png', IMAGETYPE_JPEG => 'jpg', IMAGETYPE_WEBP => 'webp'];
+
+            if ($archivo['error'] !== UPLOAD_ERR_OK || !$info || !isset($tipos[$info[2]])) {
+                header('Location: ' . URLROOT . '/configuracion?msg=qr_formato');
+                exit;
+            }
+            if ($archivo['size'] > 2 * 1024 * 1024) {
+                header('Location: ' . URLROOT . '/configuracion?msg=qr_tamano');
+                exit;
+            }
+
+            $dir = 'uploads/pagos/';
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            $destino = $dir . 'qr_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $tipos[$info[2]];
+            if (!move_uploaded_file($archivo['tmp_name'], $destino)) {
+                header('Location: ' . URLROOT . '/configuracion?msg=qr_error');
+                exit;
+            }
+            $datos['pago_qr_imagen'] = $destino;
+        }
+
+        $tieneImagen = !empty($datos['pago_qr_imagen']) || !empty($actual['pago_qr_imagen']);
+        $datos['pago_qr_activo'] = (!empty($_POST['pago_qr_activo']) && $tieneImagen) ? '1' : '0';
+
+        $ok = $this->configModel->guardarConfiguracion($datos);
+        $msg = !$ok ? 'qr_error' : ((!empty($_POST['pago_qr_activo']) && !$tieneImagen) ? 'qr_sin_imagen' : 'qr_guardado');
+        header('Location: ' . URLROOT . '/configuracion?msg=' . $msg);
+        exit;
+    }
+
     public function guardar()
     {
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {

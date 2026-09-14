@@ -59,9 +59,16 @@ class CajaModel
     // Obtener detalles de la sesión actual para el cierre
     public function obtenerResumenSesion($sesionId)
     {
-        $this->db->query("SELECT 
-                            SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN monto ELSE 0 END) as total_ingresos,
-                            SUM(CASE WHEN tipo_movimiento = 'EGRESO' THEN monto ELSE 0 END) as total_egresos,
+        // - La apertura se guarda como movimiento INGRESO/APERTURA y ademas en
+        //   cajas_sesiones.monto_inicial: sumarla en los ingresos la contaba DOS veces
+        //   (el efectivo esperado salia inflado en el monto de apertura).
+        // - El efectivo esperado solo cuenta ingresos en EFECTIVO: los cobros QR van
+        //   directo a la cuenta del dueño y se informan aparte.
+        $this->db->query("SELECT
+                            COALESCE(SUM(CASE WHEN tipo_movimiento = 'INGRESO' AND origen_modulo <> 'APERTURA' THEN monto ELSE 0 END), 0) as total_ingresos,
+                            COALESCE(SUM(CASE WHEN tipo_movimiento = 'INGRESO' AND origen_modulo <> 'APERTURA' AND metodo_pago = 'QR' THEN monto ELSE 0 END), 0) as total_qr,
+                            COALESCE(SUM(CASE WHEN tipo_movimiento = 'INGRESO' AND origen_modulo <> 'APERTURA' AND metodo_pago <> 'QR' THEN monto ELSE 0 END), 0) as total_efectivo,
+                            COALESCE(SUM(CASE WHEN tipo_movimiento = 'EGRESO' THEN monto ELSE 0 END), 0) as total_egresos,
                             (SELECT monto_inicial FROM cajas_sesiones WHERE id = :sesion) as monto_inicial
                           FROM movimientos_caja 
                           WHERE sesion_id = :sesion");
@@ -73,7 +80,7 @@ class CajaModel
     public function cerrarCaja($sesionId, $montoReal)
     {
         $resumen = $this->obtenerResumenSesion($sesionId);
-        $sistema = ($resumen->monto_inicial + $resumen->total_ingresos) - $resumen->total_egresos;
+        $sistema = ($resumen->monto_inicial + $resumen->total_efectivo) - $resumen->total_egresos;
         $diferencia = $montoReal - $sistema;
 
         $this->db->query("UPDATE cajas_sesiones SET 
@@ -111,7 +118,8 @@ class CajaModel
     {
         $this->db->query("SELECT cs.*, 
                           CONCAT(u.nombres, ' ', u.apellidos) as cajero_nombre,
-                          (SELECT SUM(monto) FROM movimientos_caja WHERE sesion_id = cs.id AND tipo_movimiento = 'INGRESO') as total_ingresos,
+                          (SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja WHERE sesion_id = cs.id AND tipo_movimiento = 'INGRESO' AND origen_modulo <> 'APERTURA') as total_ingresos,
+                          (SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja WHERE sesion_id = cs.id AND tipo_movimiento = 'INGRESO' AND origen_modulo <> 'APERTURA' AND metodo_pago = 'QR') as total_qr,
                           (SELECT SUM(monto) FROM movimientos_caja WHERE sesion_id = cs.id AND tipo_movimiento = 'EGRESO') as total_egresos
                           FROM cajas_sesiones cs
                           INNER JOIN usuarios u ON cs.usuario_id = u.id
@@ -180,8 +188,8 @@ class CajaModel
                     cs.monto_final_sistema,
                     cs.monto_final_real,
                     cs.diferencia,
-                    (SELECT SUM(monto) FROM movimientos_caja 
-                     WHERE sesion_id = cs.id AND tipo_movimiento = 'INGRESO') as total_ingresos,
+                    (SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
+                     WHERE sesion_id = cs.id AND tipo_movimiento = 'INGRESO' AND origen_modulo <> 'APERTURA') as total_ingresos,
                     (SELECT SUM(monto) FROM movimientos_caja 
                      WHERE sesion_id = cs.id AND tipo_movimiento = 'EGRESO') as total_egresos
                 FROM cajas_sesiones cs

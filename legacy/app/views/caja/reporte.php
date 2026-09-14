@@ -44,7 +44,11 @@
                                     </tr>
                                     <tr>
                                         <td class="text-success"><i class="bi bi-plus me-1"></i> Ventas/Ingresos:</td>
-                                        <td class="text-end fw-bold text-success">Bs. <?php echo number_format($data['sesion']->total_ingresos, 2); ?></td>
+                                        <td class="text-end fw-bold text-success">Bs. <?php echo number_format($data['sesion']->total_ingresos, 2); ?>
+                                            <?php if ((float) ($data['sesion']->total_qr ?? 0) > 0): ?>
+                                                <div class="small fw-normal text-muted">incluye QR Bs. <?php echo number_format((float) $data['sesion']->total_qr, 2); ?> (no está en efectivo)</div>
+                                            <?php endif; ?>
+                                        </td>
                                     </tr>
                                     <tr>
                                         <td class="text-danger"><i class="bi bi-dash me-1"></i> Gastos/Egresos:</td>

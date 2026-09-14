@@ -1,446 +1,315 @@
-<!-- Contenedor Principal (Simulando Modal o Panel) -->
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-12">
-
-            <!-- Breadcrumb -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <div class="text-muted small">
-                    <i class="bi bi-house-door-fill"></i> Inicio / Registros / Asignar Buses
+<?php
+$buses = $data['buses'] ?? [];
+$asignaciones = $data['asignaciones'] ?? [];
+$historial = !empty($data['historial']);
+$busesSinChofer = array_values(array_filter($buses, fn($b) => empty($b->chofer_actual)));
+$busesSinTipo = array_values(array_filter($buses, fn($b) => empty($b->tipo_bus_id)));
+$e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+?>
+<main class="app-main">
+    <div class="app-content-header">
+        <div class="container-fluid">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <div>
+                    <h3 class="mb-0">Asignación de tripulación</h3>
+                    <div class="text-muted small">Chofer y copiloto por defecto de cada bus. Al programar un viaje se proponen automáticamente.</div>
                 </div>
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="<?php echo URLROOT; ?>/dashboard">Inicio</a></li>
+                    <li class="breadcrumb-item">Registros</li>
+                    <li class="breadcrumb-item active" aria-current="page">Asignar buses</li>
+                </ol>
             </div>
+        </div>
+    </div>
 
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-white py-3">
-                    <h6 class="m-0 fw-bold text-secondary"><i class="bi bi-ticket-perferated-fill me-2"></i>ASIGNAR BUSES</h6>
+    <div class="app-content">
+        <div class="container-fluid">
+
+            <?php if ($busesSinTipo): ?>
+                <div class="alert alert-warning d-flex gap-3 align-items-start">
+                    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                    <div>
+                        <strong><?php echo count($busesSinTipo); ?> bus(es) sin tipo de bus definido:</strong>
+                        <?php echo $e(implode(', ', array_map(fn($b) => "{$b->placa} ({$b->asientos} asientos)", $busesSinTipo))); ?>.
+                        Sin tipo no se sabe su distribución de asientos y no se pueden programar viajes con ellos.
+                        <a href="<?php echo URLROOT; ?>/admin/registrar_buses" class="alert-link">Completar en Gestión de Flota</a>.
+                    </div>
                 </div>
-                <div class="card-body">
+            <?php endif; ?>
 
-                    <!-- Formulario Superior -->
-                    <form id="formAsignacion" action="<?php echo URLROOT; ?>/admin/guardar_asignacion" method="POST">
-                        <div class="row g-3 mb-4">
-                            <!-- Select Chofer -->
-                            <div class="col-md-4">
-                                <label for="selectChofer" class="form-label text-uppercase fw-bold text-secondary small">CHOFER:</label>
-                                <select class="form-select bg-light" id="selectChofer" name="chofer_id" required>
-                                    <option value="" selected disabled>Seleccione</option>
-                                    <?php if (!empty($data['choferes'])): ?>
-                                        <?php foreach ($data['choferes'] as $chofer): ?>
-                                            <option value="<?php echo $chofer->id; ?>">
-                                                <?php echo $chofer->nombres . ' ' . $chofer->apellidos; ?>
+            <div class="row g-3">
+                <!-- Formulario -->
+                <div class="col-xl-4">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h3 class="card-title" id="tituloFormulario"><i class="bi bi-person-plus me-2"></i>Nueva asignación</h3>
+                        </div>
+                        <div class="card-body">
+                            <form id="formAsignacion" novalidate>
+                                <input type="hidden" name="id" id="asignacionId">
+
+                                <div class="mb-3">
+                                    <label for="selectBus" class="form-label fw-semibold">Bus <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="selectBus" name="bus_id" required>
+                                        <option value="">Seleccione un bus…</option>
+                                        <?php foreach ($buses as $bus): ?>
+                                            <option value="<?php echo $bus->id; ?>"
+                                                data-tipo="<?php echo $bus->tipo_bus_id ? 1 : 0; ?>"
+                                                data-chofer="<?php echo $e($bus->chofer_actual); ?>">
+                                                <?php echo $e($bus->placa . ' · ' . trim($bus->marca . ' ' . $bus->modelo) . ' · ' . $bus->asientos . ' asientos'
+                                                    . ($bus->tipo_nombre ? '' : ' · SIN TIPO')
+                                                    . ($bus->chofer_actual ? ' · con ' . $bus->chofer_actual : '')); ?>
                                             </option>
                                         <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </select>
-                            </div>
+                                    </select>
+                                    <div class="form-text" id="ayudaBus"></div>
+                                </div>
 
-                            <!-- Select Bus -->
-                            <div class="col-md-4">
-                                <label for="selectBus" class="form-label text-uppercase fw-bold text-secondary small">BUS:</label>
-                                <select class="form-select bg-light" id="selectBus" name="bus_id" required>
-                                    <option value="" selected disabled>Seleccione</option>
-                                    <?php if (!empty($data['buses'])): ?>
-                                        <?php foreach ($data['buses'] as $bus): ?>
-                                            <option value="<?php echo $bus->id; ?>">
-                                                <?php echo $bus->placa . ' - ' . $bus->marca; ?>
+                                <div class="mb-3">
+                                    <label for="selectChofer" class="form-label fw-semibold">Chofer <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="selectChofer" name="chofer_id" required>
+                                        <option value="">Seleccione un chofer…</option>
+                                        <?php foreach ($data['choferes'] ?? [] as $p): ?>
+                                            <option value="<?php echo $p->id; ?>">
+                                                <?php echo $e("{$p->apellidos} {$p->nombres}" . ($p->numero_documento ? " · CI {$p->numero_documento}" : '') . ($p->bus_actual ? " · en {$p->bus_actual}" : '')); ?>
                                             </option>
                                         <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </select>
-                            </div>
+                                    </select>
+                                </div>
 
-                            <!-- Select Copiloto -->
-                            <div class="col-md-4">
-                                <label for="selectCopiloto" class="form-label text-uppercase fw-bold text-secondary small">COPILOTO (Opcional):</label>
-                                <select class="form-select bg-light" id="selectCopiloto" name="copiloto_id">
-                                    <option value="" selected>-- Sin Copiloto --</option>
-                                    <?php if (!empty($data['copilotos'])): ?>
-                                        <?php foreach ($data['copilotos'] as $copiloto): ?>
-                                            <option value="<?php echo $copiloto->id; ?>">
-                                                <?php echo $copiloto->nombres . ' ' . $copiloto->apellidos; ?>
+                                <div class="mb-4">
+                                    <label for="selectCopiloto" class="form-label fw-semibold">Copiloto <span class="text-muted fw-normal">(opcional)</span></label>
+                                    <select class="form-select" id="selectCopiloto" name="copiloto_id">
+                                        <option value="">Sin copiloto</option>
+                                        <?php foreach ($data['copilotos'] ?? [] as $p): ?>
+                                            <option value="<?php echo $p->id; ?>">
+                                                <?php echo $e("{$p->apellidos} {$p->nombres}" . ($p->bus_actual ? " · en {$p->bus_actual}" : '')); ?>
                                             </option>
                                         <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </select>
-                            </div>
+                                    </select>
+                                </div>
 
-                            <!-- Boton Guardar -->
-                            <div class="col-12 mt-3">
-                                <button type="submit" class="btn btn-primary px-4 fw-bold">
-                                    Guardar
-                                </button>
-                            </div>
-                        </div>
-                    </form>
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary flex-grow-1" id="btnGuardar">
+                                        <i class="bi bi-check2 me-1"></i> Guardar asignación
+                                    </button>
+                                    <button type="button" class="btn btn-light" id="btnCancelarEdicion" hidden>Cancelar</button>
+                                </div>
+                            </form>
 
-                    <hr class="text-muted opacity-25">
-
-                    <!-- Titulo Tabla -->
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold text-secondary"><i class="bi bi-list-ul me-2"></i> RELACION DE CHOFERES - BUSES</h6>
-                    </div>
-
-                    <!-- Buscador y Paginacion Top -->
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <div class="input-group">
-                                <span class="input-group-text bg-white border-end-0"><label class="me-2">Buscar:</label></span>
-                                <input type="text" class="form-control border-start-0 ps-0" placeholder="">
-                                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                            </div>
-                        </div>
-                        <div class="col-md-6 d-flex justify-content-end align-items-center">
-                            <label class="me-2 text-secondary">Lista:</label>
-                            <select class="form-select w-auto">
-                                <option>10</option>
-                                <option>25</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Tabla -->
-                    <div class="table-responsive">
-                        <table class="table table-bordered align-middle">
-                            <thead class="bg-teal text-white" style="background-color: #17a2b8; color: white;">
-                                <tr class="text-uppercase text-center small fw-bold">
-                                    <th class="py-3">NOMBRE CHOFER <i class="bi bi-chevron-expand float-end"></i></th>
-                                    <th class="py-3">NOMBRE COPILOTO <i class="bi bi-chevron-expand float-end"></i></th>
-                                    <th class="py-3"># PLACA BUS <i class="bi bi-chevron-expand float-end"></i></th>
-                                    <th class="py-3"># PASAJEROS <i class="bi bi-chevron-expand float-end"></i></th>
-                                    <th class="py-3">ESTADO <i class="bi bi-chevron-expand float-end"></i></th>
-                                    <th class="py-3"><i class="bi bi-gear-fill"></i></th>
-                                </tr>
-                            </thead>
-                            <tbody class="text-center text-secondary small bg-white">
-                                <?php if (!empty($data['asignaciones'])): ?>
-                                    <?php foreach ($data['asignaciones'] as $asignacion): ?>
-                                        <tr>
-                                            <td class="text-start ps-4"><?php echo $asignacion->nombre_chofer; ?></td>
-                                            <td><?php echo $asignacion->nombre_copiloto; ?></td>
-                                            <td><?php echo $asignacion->placa_bus; ?></td>
-                                            <td><?php echo $asignacion->total_pasajeros; ?></td>
-                                            <td>
-                                                <div class="form-check form-switch d-flex justify-content-center">
-                                                    <input class="form-check-input" type="checkbox" role="switch" <?php echo ($asignacion->estado == 1) ? 'checked' : ''; ?>>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <a href="#" class="text-primary fs-5"><i class="bi bi-pencil-square"></i></a>
-                                                <a href="#" class="text-danger fs-5 ms-2" onclick="eliminarAsignacion(<?php echo $asignacion->id; ?>); return false;">
-                                                    <i class="bi bi-trash"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
+                            <?php if ($busesSinChofer): ?>
+                                <hr>
+                                <div class="small text-muted mb-2">Buses activos sin tripulación:</div>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <?php foreach ($busesSinChofer as $b): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="elegirBus(<?php echo $b->id; ?>)">
+                                            <?php echo $e($b->placa); ?>
+                                        </button>
                                     <?php endforeach; ?>
-                                <?php else: ?>
-                                    <tr>
-                                        <td colspan="6">No hay asignaciones registradas.</td>
-                                    </tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Paginacion Bottom -->
-                    <div class="row mt-3 align-items-center">
-                        <div class="col-md-6 small text-secondary">
-                            Mostrando del 1 al <?php echo count($data['asignaciones'] ?? []); ?> de un total de <?php echo count($data['asignaciones'] ?? []); ?> registros
-                        </div>
-                        <div class="col-md-6">
-                            <nav>
-                                <ul class="pagination justify-content-end mb-0">
-                                    <li class="page-item disabled"><a class="page-link" href="#">&larr;</a></li>
-                                    <li class="page-item active bg-dark"><a class="page-link bg-dark border-dark" href="#">1</a></li>
-                                    <li class="page-item disabled"><a class="page-link" href="#">&rarr;</a></li>
-                                </ul>
-                            </nav>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     </div>
+                </div>
 
+                <!-- Listado -->
+                <div class="col-xl-8">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <h3 class="card-title"><i class="bi bi-list-ul me-2"></i><?php echo $historial ? 'Historial de asignaciones' : 'Asignaciones activas'; ?></h3>
+                            <div class="card-tools">
+                                <a class="btn btn-sm btn-light" href="<?php echo URLROOT; ?>/admin/asignar_buses<?php echo $historial ? '' : '?historial=1'; ?>">
+                                    <?php echo $historial ? 'Ver solo activas' : 'Ver historial'; ?>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <input type="search" class="form-control mb-3" id="buscarAsignacion" placeholder="Buscar por chofer, copiloto, placa o tipo…">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" id="tablaAsignaciones">
+                                    <thead>
+                                        <tr>
+                                            <th>Bus</th>
+                                            <th>Asientos / tipo</th>
+                                            <th>Chofer</th>
+                                            <th>Copiloto</th>
+                                            <th>Desde</th>
+                                            <th class="text-end">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (!$asignaciones): ?>
+                                            <tr><td colspan="6" class="text-center text-muted py-4">No hay asignaciones <?php echo $historial ? 'registradas' : 'activas'; ?>.</td></tr>
+                                        <?php endif; ?>
+                                        <?php foreach ($asignaciones as $a): ?>
+                                            <?php $coincide = $a->tipo_capacidad !== null && (int) $a->tipo_capacidad === (int) $a->asientos; ?>
+                                            <tr class="<?php echo $a->estado ? '' : 'text-muted'; ?>">
+                                                <td>
+                                                    <span class="badge bg-dark font-monospace"><?php echo $e($a->placa_bus); ?></span>
+                                                    <div class="small text-muted"><?php echo $e(trim($a->marca . ' ' . $a->modelo)); ?></div>
+                                                </td>
+                                                <td>
+                                                    <strong><?php echo (int) $a->asientos; ?></strong>
+                                                    <?php if ($a->tipo_nombre): ?>
+                                                        <div class="small <?php echo $coincide ? 'text-muted' : 'text-danger'; ?>">
+                                                            <?php echo $e($a->tipo_nombre); ?> (<?php echo (int) $a->tipo_capacidad; ?>)
+                                                            <?php if (!$coincide): ?><i class="bi bi-exclamation-triangle-fill" title="La capacidad del tipo no coincide con los asientos del bus"></i><?php endif; ?>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <div class="small text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Sin tipo</div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?php echo $e($a->nombre_chofer); ?>
+                                                    <?php if ($a->documento_chofer): ?><div class="small text-muted">CI <?php echo $e($a->documento_chofer); ?></div><?php endif; ?>
+                                                </td>
+                                                <td><?php echo $a->nombre_copiloto ? $e($a->nombre_copiloto) : '<span class="text-muted">—</span>'; ?></td>
+                                                <td class="small">
+                                                    <?php echo $a->fecha_asignacion ? date('d/m/Y', strtotime($a->fecha_asignacion)) : '—'; ?>
+                                                    <?php if (!$a->estado): ?><div><span class="badge bg-secondary-subtle text-secondary">Finalizada</span></div><?php endif; ?>
+                                                </td>
+                                                <td class="text-end text-nowrap">
+                                                    <?php if ($a->estado): ?>
+                                                        <button type="button" class="btn btn-sm btn-light text-primary" title="Editar"
+                                                            onclick="editarAsignacion(<?php echo (int) $a->id; ?>, <?php echo (int) $a->bus_id; ?>, <?php echo (int) $a->chofer_id; ?>, <?php echo (int) $a->copiloto_id; ?>)">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-light text-danger" title="Finalizar asignación"
+                                                            onclick="finalizarAsignacion(<?php echo (int) $a->id; ?>, '<?php echo $e($a->placa_bus); ?>')">
+                                                            <i class="bi bi-person-dash"></i>
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+</main>
 
 <script>
-    // ==========================================
-    // 🚀 IMPLEMENTACIÓN AJAX CON SWEETALERT2
-    // ==========================================
+    (function() {
+        const URL_GUARDAR = '<?php echo URLROOT; ?>/admin/guardar_asignacion';
+        const form = document.getElementById('formAsignacion');
+        const btnGuardar = document.getElementById('btnGuardar');
+        const btnCancelar = document.getElementById('btnCancelarEdicion');
+        const selectBus = document.getElementById('selectBus');
+        const ayudaBus = document.getElementById('ayudaBus');
 
-    const formAsignacion = document.getElementById('formAsignacion');
-
-    formAsignacion.addEventListener('submit', function(e) {
-        // 1. Prevenir la recarga de la página
-        e.preventDefault();
-
-        // 2. Obtener el botón de submit y deshabilitarlo
-        const btnSubmit = this.querySelector('[type="submit"]');
-        const textoOriginal = btnSubmit.innerHTML;
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
-
-        // 3. Recopilar los datos del formulario
-        const formData = new FormData(this);
-
-        // 4. Enviar la petición AJAX usando Fetch API
-        fetch('<?php echo URLROOT; ?>/admin/guardar_asignacion', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                // Verificar que la respuesta sea JSON válido
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('La respuesta del servidor no es JSON válido');
-                }
-                return response.json();
-            })
-            .then(data => {
-                // 5. Procesar la respuesta del servidor
-                if (data.status === 'success') {
-                    // ✅ ÉXITO - Mostrar SweetAlert2 con diseño moderno
-                    Swal.fire({
-                        icon: 'success',
-                        title: '¡Asignación Exitosa!',
-                        text: data.message,
-                        confirmButtonColor: '#3085d6',
-                        confirmButtonText: 'Aceptar',
-                        allowOutsideClick: false,
-                        customClass: {
-                            popup: 'animated fadeInDown'
-                        }
-                    }).then((result) => {
-                        // 6. Redirigir al hacer clic en "Aceptar"
-                        if (result.isConfirmed) {
-                            window.location.href = '<?php echo URLROOT; ?>/admin/asignar_buses';
-                        }
-                    });
-                } else {
-                    // ❌ ERROR - Mostrar mensaje de error
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error al Asignar',
-                        text: data.message || 'Ocurrió un error inesperado. Por favor, intente nuevamente.',
-                        confirmButtonColor: '#d33',
-                        confirmButtonText: 'Entendido'
-                    });
-
-                    // Restaurar el botón
-                    btnSubmit.disabled = false;
-                    btnSubmit.innerHTML = textoOriginal;
-                }
-            })
-            .catch(error => {
-                // ⚠️ ERROR DE RED O PARSING
-                console.error('Error:', error);
-
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de Conexión',
-                    text: 'No se pudo conectar con el servidor. Verifique su conexión a internet.',
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'Entendido'
-                });
-
-                // Restaurar el botón
-                btnSubmit.disabled = false;
-                btnSubmit.innerHTML = textoOriginal;
-            });
-    });
-
-    // ==========================================
-    // 🗑️ FUNCIÓN ELIMINAR CON SWEETALERT2
-    // ==========================================
-
-    function eliminarAsignacion(id) {
-        Swal.fire({
-            title: '¿Está seguro?',
-            text: "Esta acción eliminará la asignación definitivamente",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                window.location.href = '<?php echo URLROOT; ?>/admin/eliminar_asignacion/' + id;
-            }
-        });
-    }
-
-    // ==========================================
-    // ✏️ FUNCIONALIDAD DE EDICIÓN DE ASIGNACIONES
-    // ==========================================
-
-    /**
-     * Detectar clic en botones de editar
-     */
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.btn-editar')) {
-            const button = e.target.closest('.btn-editar');
-            const asignacionId = button.getAttribute('data-id');
-
-            if (!asignacionId) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: 'No se pudo identificar la asignación a editar.',
-                    confirmButtonColor: '#d33'
-                });
+        function actualizarAyudaBus() {
+            const opt = selectBus.selectedOptions[0];
+            if (!opt || !opt.value) {
+                ayudaBus.textContent = '';
+                ayudaBus.className = 'form-text';
                 return;
             }
-
-            abrirModalEditarAsignacion(asignacionId);
+            const avisos = [];
+            if (opt.dataset.tipo === '0') avisos.push('Este bus no tiene tipo de bus definido.');
+            if (opt.dataset.chofer) avisos.push('Actualmente lo maneja ' + opt.dataset.chofer + '.');
+            ayudaBus.textContent = avisos.join(' ');
+            ayudaBus.className = 'form-text ' + (opt.dataset.tipo === '0' ? 'text-danger' : 'text-muted');
         }
-    });
+        selectBus.addEventListener('change', actualizarAyudaBus);
 
-    /**
-     * Función para abrir el modal y cargar los datos de la asignación
-     */
-    function abrirModalEditarAsignacion(asignacionId) {
-        // Mostrar indicador de carga
-        Swal.fire({
-            title: 'Cargando...',
-            text: 'Obteniendo información de la asignación',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            didOpen: () => {
-                Swal.showLoading();
-            }
+        window.elegirBus = function(id) {
+            selectBus.value = id;
+            actualizarAyudaBus();
+            document.getElementById('selectChofer').focus();
+        };
+
+        window.editarAsignacion = function(id, busId, choferId, copilotoId) {
+            document.getElementById('asignacionId').value = id;
+            selectBus.value = busId;
+            document.getElementById('selectChofer').value = choferId;
+            document.getElementById('selectCopiloto').value = copilotoId || '';
+            document.getElementById('tituloFormulario').innerHTML = '<i class="bi bi-pencil me-2"></i>Editar asignación';
+            btnCancelar.hidden = false;
+            actualizarAyudaBus();
+            form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        btnCancelar.addEventListener('click', function() {
+            form.reset();
+            document.getElementById('asignacionId').value = '';
+            document.getElementById('tituloFormulario').innerHTML = '<i class="bi bi-person-plus me-2"></i>Nueva asignación';
+            btnCancelar.hidden = true;
+            actualizarAyudaBus();
         });
 
-        // Realizar petición AJAX para obtener los datos
-        fetch('<?php echo URLROOT; ?>/admin/obtener_asignacion', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'id=' + asignacionId
-            })
-            .then(response => {
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('La respuesta del servidor no es JSON válido');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.status === 'success') {
-                    // Cerrar el loading
-                    Swal.close();
+        function enviar(reemplazar) {
+            const datos = new FormData(form);
+            if (reemplazar) datos.append('reemplazar', '1');
 
-                    // Llenar el formulario con los datos recibidos
-                    document.getElementById('editAsignacionId').value = asignacionId;
-                    document.getElementById('editSelectChofer').value = data.id_chofer || '';
-                    document.getElementById('editSelectBus').value = data.id_bus || '';
-                    document.getElementById('editSelectCopiloto').value = data.id_copiloto || '';
-
-                    // Abrir el modal
-                    const modal = new bootstrap.Modal(document.getElementById('modalEditarAsignacion'));
-                    modal.show();
-                } else {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: data.message || 'No se pudo cargar la información de la asignación.',
-                        confirmButtonColor: '#d33'
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de Conexión',
-                    text: 'No se pudo conectar con el servidor. Verifique su conexión a internet.',
-                    confirmButtonColor: '#d33'
-                });
-            });
-    }
-
-    /**
-     * Manejador del evento para guardar los cambios
-     */
-    document.getElementById('btnGuardarEdicionAsignacion').addEventListener('click', function() {
-        const form = document.getElementById('formEditarAsignacion');
-
-        // Validar el formulario
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return;
+            btnGuardar.disabled = true;
+            fetch(URL_GUARDAR, { method: 'POST', body: datos, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status === 'conflict') {
+                        return Swal.fire({
+                            icon: 'warning',
+                            title: 'La asignación choca con otras',
+                            html: '<ul class="text-start mb-2">' + res.conflictos.map(c => '<li>' + escapeHtml(c) + '</li>').join('') + '</ul>' +
+                                  '<div class="small text-muted">Si continúa, esas asignaciones se finalizan (quedan en el historial).</div>',
+                            showCancelButton: true,
+                            confirmButtonText: 'Reemplazar y guardar',
+                            cancelButtonText: 'Revisar',
+                        }).then(r => { if (r.isConfirmed) enviar(true); });
+                    }
+                    if (res.status === 'success') {
+                        const avisos = (res.avisos || []).map(a => '<li>' + escapeHtml(a) + '</li>').join('');
+                        return Swal.fire({
+                            icon: avisos ? 'info' : 'success',
+                            title: res.message,
+                            html: avisos ? '<ul class="text-start mb-0">' + avisos + '</ul>' : undefined,
+                        }).then(() => window.location.href = '<?php echo URLROOT; ?>/admin/asignar_buses');
+                    }
+                    Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: res.message || 'Error inesperado.' });
+                })
+                .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión', text: 'No se pudo contactar al servidor.' }))
+                .finally(() => { btnGuardar.disabled = false; });
         }
 
-        // Deshabilitar el botón y mostrar indicador de carga
-        const btnGuardar = this;
-        const btnOriginalText = btnGuardar.innerHTML;
-        btnGuardar.disabled = true;
-        btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
+        form.addEventListener('submit', function(ev) {
+            ev.preventDefault();
+            if (!selectBus.value || !document.getElementById('selectChofer').value) {
+                Swal.fire({ icon: 'warning', title: 'Faltan datos', text: 'Seleccione el bus y el chofer.' });
+                return;
+            }
+            enviar(false);
+        });
 
-        // Recopilar los datos del formulario
-        const formData = new FormData(form);
-
-        // Enviar la petición AJAX
-        fetch('<?php echo URLROOT; ?>/admin/editar_asignacion', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    throw new Error('La respuesta del servidor no es JSON válido');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.status === 'success') {
-                    // Cerrar el modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarAsignacion'));
-                    modal.hide();
-
-                    // Mostrar SweetAlert2 de éxito
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Actualizado',
-                        text: data.message || 'La asignación ha sido actualizada correctamente.',
-                        confirmButtonColor: '#3085d6',
-                        confirmButtonText: 'OK',
-                        allowOutsideClick: false
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            // Recargar la página para mostrar los cambios
-                            window.location.reload();
-                        }
-                    });
-                } else {
-                    // Mostrar error
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error al Actualizar',
-                        text: data.message || 'Ocurrió un error inesperado. Por favor, intente nuevamente.',
-                        confirmButtonColor: '#d33',
-                        confirmButtonText: 'Entendido'
-                    });
-
-                    // Restaurar el botón
-                    btnGuardar.disabled = false;
-                    btnGuardar.innerHTML = btnOriginalText;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de Conexión',
-                    text: 'No se pudo conectar con el servidor. Verifique su conexión a internet.',
-                    confirmButtonColor: '#d33',
-                    confirmButtonText: 'Entendido'
-                });
-
-                // Restaurar el botón
-                btnGuardar.disabled = false;
-                btnGuardar.innerHTML = btnOriginalText;
+        window.finalizarAsignacion = function(id, placa) {
+            Swal.fire({
+                icon: 'question',
+                title: 'Finalizar asignación',
+                text: 'El bus ' + placa + ' quedará sin tripulación por defecto. La asignación se conserva en el historial.',
+                showCancelButton: true,
+                confirmButtonText: 'Finalizar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#dc3545',
+            }).then(r => {
+                if (r.isConfirmed) window.location.href = '<?php echo URLROOT; ?>/admin/eliminar_asignacion/' + id;
             });
-    });
+        };
+
+        document.getElementById('buscarAsignacion').addEventListener('input', function() {
+            const q = this.value.trim().toLowerCase();
+            document.querySelectorAll('#tablaAsignaciones tbody tr').forEach(tr => {
+                tr.hidden = q !== '' && !tr.textContent.toLowerCase().includes(q);
+            });
+        });
+
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+    })();
 </script>

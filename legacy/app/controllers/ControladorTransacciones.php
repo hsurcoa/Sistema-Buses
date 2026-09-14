@@ -67,6 +67,14 @@ class ControladorTransacciones extends Controller
                     $this->procesarGestionReserva($datos);
                     break;
 
+                case 'confirmar_pago':
+                    $this->procesarConfirmacionPago($datos);
+                    break;
+
+                case 'cancelar_qr':
+                    $this->procesarCancelacionQr($datos);
+                    break;
+
                 default:
                     echo json_encode(['status' => 'error', 'msg' => 'Acción no válida']);
                     break;
@@ -90,6 +98,18 @@ class ControladorTransacciones extends Controller
 
         $estado = ($datos['tipo'] === 'venta') ? 'vendido' : 'reservado';
 
+        // Cobro con QR: el asiento se reserva unos minutos mientras el pasajero paga
+        $esQr = ($datos['tipo'] === 'qr');
+        $minutosQr = null;
+        if ($esQr) {
+            $config = $this->model('ConfiguracionModel')->obtenerConfiguracion();
+            if (empty($config['pago_qr_activo']) || empty($config['pago_qr_imagen'])) {
+                echo json_encode(['status' => 'error', 'msg' => 'El cobro con QR no está configurado. Un administrador debe cargar el QR en Configuración.']);
+                return;
+            }
+            $minutosQr = max(3, (int) ($config['pago_qr_minutos'] ?? 15));
+        }
+
         // Preparar Datos Modelo
         $ventaData = [
             'viaje_id' => $datos['viaje_id'],
@@ -101,7 +121,9 @@ class ControladorTransacciones extends Controller
             'precio' => $datos['precio'] ?? 0,
             'estado' => $estado,
             'usuario_id' => SessionManager::getInstance()->getUserId(),
-            'parada_id' => $datos['parada_id'] ?? null // ✅ Nuevo campo para parada intermedia
+            'parada_id' => $datos['parada_id'] ?? null, // ✅ Nuevo campo para parada intermedia
+            'metodo_pago' => $esQr ? 'QR' : 'EFECTIVO',
+            'minutos_reserva' => $minutosQr,
         ];
 
         // Separar nombres y apellidos si viene todo en 'nombres'
@@ -156,11 +178,9 @@ class ControladorTransacciones extends Controller
         try {
             $response = [];
             if ($subAccion === 'confirmar_pago') {
-                if ($this->rutaModel->cambiarEstadoBoleto($idBoleto, 'vendido')) {
-                    $response = ['status' => 'success', 'tipo' => 'confirmacion'];
-                } else {
-                    $response = ['status' => 'error', 'msg' => 'Error al actualizar boleto'];
-                }
+                // Registra el ingreso en la caja abierta (antes solo cambiaba el estado)
+                $ticket = $this->rutaModel->confirmarPagoBoleto($idBoleto, SessionManager::getInstance()->getUserId(), 'EFECTIVO');
+                $response = ['status' => 'success', 'tipo' => 'confirmacion', 'ticket' => $ticket];
             } elseif ($subAccion === 'eliminar') {
                 if ($this->rutaModel->cancelarBoleto($idBoleto)) {
                     $response = ['status' => 'success', 'tipo' => 'eliminacion'];
@@ -177,6 +197,37 @@ class ControladorTransacciones extends Controller
 
         if (ob_get_length()) ob_clean();
         echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        ob_end_flush();
+        exit;
+    }
+
+    /** Confirma el cobro de un boleto reservado (QR validado por el vendedor, o efectivo). */
+    private function procesarConfirmacionPago($datos)
+    {
+        try {
+            $ticket = $this->rutaModel->confirmarPagoBoleto(
+                $datos['id_boleto'] ?? 0,
+                SessionManager::getInstance()->getUserId(),
+                ($datos['metodo'] ?? 'EFECTIVO') === 'QR' ? 'QR' : 'EFECTIVO',
+                $datos['referencia'] ?? null
+            );
+            $response = ['status' => 'success', 'ticket' => $ticket];
+        } catch (Throwable $e) {
+            $response = ['status' => 'error', 'msg' => $e->getMessage()];
+        }
+
+        if (ob_get_length()) ob_clean();
+        echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        ob_end_flush();
+        exit;
+    }
+
+    /** Cancela un cobro QR pendiente y libera el asiento. */
+    private function procesarCancelacionQr($datos)
+    {
+        $ok = $this->rutaModel->cancelarCobroQr($datos['id_boleto'] ?? 0);
+        if (ob_get_length()) ob_clean();
+        echo json_encode($ok ? ['status' => 'success'] : ['status' => 'error', 'msg' => 'El cobro ya no está pendiente (fue confirmado, cancelado o venció).']);
         ob_end_flush();
         exit;
     }

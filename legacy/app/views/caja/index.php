@@ -54,6 +54,10 @@
                                 </div>
                                 <h3 class="fw-bold mb-0">Bs. <?php echo number_format($data['resumen']->total_ingresos, 2); ?></h3>
                             </div>
+                            <div class="small text-white-50 mt-2">
+                                Efectivo: Bs. <?php echo number_format((float) $data['resumen']->total_efectivo, 2); ?>
+                                · QR: Bs. <?php echo number_format((float) $data['resumen']->total_qr, 2); ?>
+                            </div>
                             <!-- BOTÓN REPORTE -->
                             <button class="btn btn-sm btn-light text-success fw-bold position-absolute top-0 end-0 m-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalReporteIngresos">
                                 <i class="bi bi-file-earmark-bar-graph me-1"></i> REPORTES
@@ -92,14 +96,18 @@
                         <div class="card-body p-4">
 
                             <?php
-                            $saldoSistema = ($data['resumen']->monto_inicial + $data['resumen']->total_ingresos) - $data['resumen']->total_egresos;
+                            // Solo el efectivo debe estar en el cajon; los cobros QR van a la cuenta del dueño
+                            $saldoSistema = ($data['resumen']->monto_inicial + $data['resumen']->total_efectivo) - $data['resumen']->total_egresos;
                             ?>
 
                             <div class="alert alert-info border-info d-flex align-items-center mb-4">
                                 <i class="bi bi-info-circle-fill fs-3 me-3"></i>
                                 <div>
-                                    <small class="text-uppercase fw-bold">Saldo Esperado en Sistema</small>
+                                    <small class="text-uppercase fw-bold">Efectivo esperado en caja</small>
                                     <h3 class="fw-bold mb-0">Bs. <?php echo number_format($saldoSistema, 2); ?></h3>
+                                    <?php if ((float) $data['resumen']->total_qr > 0): ?>
+                                        <small>Cobros QR (no están en el cajón, verifique en la cuenta): <strong>Bs. <?php echo number_format((float) $data['resumen']->total_qr, 2); ?></strong></small>
+                                    <?php endif; ?>
                                 </div>
                             </div>
 

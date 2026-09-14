@@ -1,3 +1,30 @@
+<?php
+// Opciones de tipo de bus (define asientos y distribucion). Se usan en el alta y en la edicion.
+$opcionesTipoBus = '';
+foreach ($data['tipos_buses'] ?? [] as $tipo) {
+    $opcionesTipoBus .= sprintf(
+        '<option value="%d" data-capacidad="%d" data-pisos="%d">%s (%d asientos, %d piso%s)%s</option>',
+        $tipo->id, $tipo->capacidad, $tipo->pisos, htmlspecialchars($tipo->nombre), $tipo->capacidad, $tipo->pisos,
+        $tipo->pisos > 1 ? 's' : '', $tipo->estado ? '' : ' · tipo inactivo'
+    );
+}
+if ($opcionesTipoBus === '') {
+    $opcionesTipoBus = '<option value="" disabled>No hay tipos de buses registrados</option>';
+}
+
+// Revision de flota: datos que impiden que la venta muestre el bus real
+$revisionFlota = [];
+foreach ($data['vehiculos'] ?? [] as $bus) {
+    if (empty($bus->tipo_bus_id)) {
+        $revisionFlota[] = "<strong>{$bus->placa}</strong>: sin tipo de bus ({$bus->asientos} asientos registrados). Edítelo y elija el tipo; si no existe uno de {$bus->asientos} asientos, créelo en Tipos de Buses.";
+    } elseif ((int) $bus->tipo_capacidad !== (int) $bus->asientos) {
+        $revisionFlota[] = "<strong>{$bus->placa}</strong>: el tipo {$bus->tipo_nombre} tiene {$bus->tipo_capacidad} asientos pero el bus figura con {$bus->asientos}.";
+    }
+    if (preg_match('/^(19|20)\d{2}$/', trim((string) $bus->modelo))) {
+        $revisionFlota[] = "<strong>{$bus->placa}</strong>: el modelo \"{$bus->modelo}\" es un año; corrija el modelo (p. ej. Paradiso 1800).";
+    }
+}
+?>
 <!--begin::App Main-->
 <main class="app-main">
     <!--begin::App Content Header-->
@@ -57,6 +84,15 @@
                                 </script>
                             <?php endif; ?>
 
+                            <?php if ($revisionFlota): ?>
+                                <div class="alert alert-warning">
+                                    <div class="fw-bold mb-1"><i class="bi bi-clipboard-check me-1"></i> Revisión de flota (<?php echo count($revisionFlota); ?>)</div>
+                                    <ul class="mb-0 small">
+                                        <?php foreach ($revisionFlota as $item): ?><li><?php echo $item; ?></li><?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
                             <!-- Filtros y Búsqueda -->
                             <div class="row mb-4 g-3">
                                 <div class="col-md-4">
@@ -81,6 +117,7 @@
                                             <th>Estado</th>
                                             <th>Unidad</th>
                                             <th>Placa</th>
+                                            <th>Asientos / tipo</th>
                                             <th>Propietario</th>
                                             <th>Detalles Técnicos</th>
                                             <th>Caracteristicas</th>
@@ -111,6 +148,16 @@
                                                         <div class="badge bg-dark text-white font-monospace border border-secondary px-2 py-1">
                                                             <?php echo $bus->placa; ?>
                                                         </div>
+                                                    </td>
+                                                    <td>
+                                                        <strong><?php echo (int) $bus->asientos; ?></strong> asientos
+                                                        <?php if (!empty($bus->tipo_nombre)): ?>
+                                                            <div class="small <?php echo ((int) $bus->tipo_capacidad === (int) $bus->asientos) ? 'text-muted' : 'text-danger'; ?>">
+                                                                <?php echo htmlspecialchars($bus->tipo_nombre); ?> · <?php echo (int) $bus->tipo_pisos; ?> piso<?php echo $bus->tipo_pisos > 1 ? 's' : ''; ?>
+                                                            </div>
+                                                        <?php else: ?>
+                                                            <div class="small text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Sin tipo de bus</div>
+                                                        <?php endif; ?>
                                                     </td>
                                                     <td>
                                                         <div class="d-flex align-items-center">
@@ -149,7 +196,7 @@
                                             <?php endforeach; ?>
                                         <?php else: ?>
                                             <tr>
-                                                <td colspan="7" class="text-center py-5 text-muted">No hay buses registrados.</td>
+                                                <td colspan="8" class="text-center py-5 text-muted">No hay buses registrados.</td>
                                             </tr>
                                         <?php endif; ?>
                                     </tbody>
@@ -354,19 +401,7 @@
                                             <div class="form-floating">
                                                 <select class="form-select" id="tipoBusSelect" name="tipo_bus_id" required>
                                                     <option value="">Seleccione el tipo de bus...</option>
-                                                    <?php if (!empty($data['tipos_buses'])): ?>
-                                                        <?php foreach ($data['tipos_buses'] as $tipo): ?>
-                                                            <option value="<?php echo $tipo->id; ?>"
-                                                                data-capacidad="<?php echo $tipo->capacidad; ?>"
-                                                                data-pisos="<?php echo $tipo->pisos; ?>">
-                                                                <?php echo $tipo->nombre; ?>
-                                                                (<?php echo $tipo->capacidad; ?> asientos,
-                                                                <?php echo $tipo->pisos; ?> piso<?php echo $tipo->pisos > 1 ? 's' : ''; ?>)
-                                                            </option>
-                                                        <?php endforeach; ?>
-                                                    <?php else: ?>
-                                                        <option value="" disabled>⚠️ No hay tipos de buses registrados</option>
-                                                    <?php endif; ?>
+                                                    <?php echo $opcionesTipoBus; ?>
                                                 </select>
                                                 <label for="tipoBusSelect">
                                                     <i class="bi bi-bus-front me-1"></i>Tipo de Bus
@@ -395,12 +430,12 @@
                                         <!-- Total Asientos (Auto-llenado) -->
                                         <div class="col-md-6">
                                             <div class="form-floating">
-                                                <input type="number" class="form-control" id="asientosInput" name="asientos" placeholder="40" required>
+                                                <input type="number" class="form-control" id="asientosInput" name="asientos" placeholder="40" required readonly>
                                                 <label for="asientosInput">Total Asientos</label>
                                             </div>
                                             <small class="text-muted mt-1 d-block">
                                                 <i class="bi bi-lightbulb me-1"></i>
-                                                Se auto-completa según el tipo de bus
+                                                Sale del tipo de bus (no se edita a mano)
                                             </small>
                                         </div>
 
@@ -665,9 +700,17 @@
                                 <i class="bi bi-people-fill me-2"></i>Capacidad y Tipo de Servicio
                             </h6>
                             <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label small" for="editTipoBus">Tipo de bus <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="editTipoBus" name="tipo_bus_id" required>
+                                        <option value="">Seleccione el tipo de bus…</option>
+                                        <?php echo $opcionesTipoBus; ?>
+                                    </select>
+                                    <div class="form-text">Define la cantidad y distribución de asientos que se venden.</div>
+                                </div>
                                 <div class="col-md-4">
                                     <label class="form-label small">Total Asientos</label>
-                                    <input type="number" class="form-control" id="editAsientos" name="asientos" required>
+                                    <input type="number" class="form-control" id="editAsientos" name="asientos" required readonly>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label small">Máx. Pasajeros</label>
@@ -1178,6 +1221,7 @@
                     document.getElementById('editAltura').value = data.bus.altura || '';
                     document.getElementById('editPesoSeco').value = data.bus.peso_seco || '';
                     document.getElementById('editPesoBruto').value = data.bus.peso_bruto || '';
+                    document.getElementById('editTipoBus').value = data.bus.tipo_bus_id || '';
                     document.getElementById('editAsientos').value = data.bus.asientos || '';
                     document.getElementById('editPasajeros').value = data.bus.pasajeros || '';
                     document.getElementById('editTipoServicio').value = data.bus.tipo_servicio || 'Normal';
@@ -1408,6 +1452,20 @@
     /**
      * ⭐ NUEVO: Auto-completar asientos según el tipo de bus seleccionado
      */
+    document.getElementById('editTipoBus').addEventListener('change', function() {
+        const capacidad = this.selectedOptions[0]?.getAttribute('data-capacidad');
+        if (capacidad) {
+            document.getElementById('editAsientos').value = capacidad;
+            const pasajeros = document.getElementById('editPasajeros');
+            if (!pasajeros.value || parseInt(pasajeros.value) < parseInt(capacidad)) pasajeros.value = capacidad;
+        }
+    });
+
+    // Placa siempre en mayusculas y sin espacios
+    document.querySelectorAll('input[name="placa"]').forEach(input => {
+        input.addEventListener('input', () => { input.value = input.value.toUpperCase().replace(/\s+/g, ''); });
+    });
+
     document.getElementById('tipoBusSelect').addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
         const capacidad = selectedOption.getAttribute('data-capacidad');

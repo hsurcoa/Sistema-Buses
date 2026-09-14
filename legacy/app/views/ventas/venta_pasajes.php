@@ -330,6 +330,52 @@
             box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
         }
 
+        .btn-qr-indigo {
+            width: 100%;
+            margin-top: 10px;
+            background: var(--accent, #6366f1);
+            color: #fff;
+            border: none;
+            padding: 11px 16px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+            transition: all 0.3s;
+        }
+
+        .btn-qr-indigo:hover {
+            background: var(--accent-dark, #4f46e5);
+            transform: translateY(-2px);
+        }
+
+        .qr-cobro-img {
+            width: 100%;
+            max-width: 280px;
+            aspect-ratio: 1;
+            object-fit: contain;
+            background: #fff;
+            border: 1px solid var(--color-border, #e5e7eb);
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        .qr-cobro-monto {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--accent-dark, #4f46e5);
+            line-height: 1.1;
+        }
+
+        .qr-cobro-reloj {
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+        }
+
         .btn-reserve-yellow:active,
         .btn-sell-green:active {
             transform: translateY(0);
@@ -597,8 +643,14 @@
                                             <i class="fas fa-dollar-sign"></i> Cobrar y emitir
                                         </button>
                                     </div>
+                                    <?php if (!empty($data['pago_qr'])): ?>
+                                        <button type="button" id="btnCobrarQr" class="btn-qr-indigo" onclick="procesarBoton(3)">
+                                            <i class="fas fa-qrcode"></i> Cobrar con QR
+                                        </button>
+                                    <?php endif; ?>
                                     <p class="text-center text-muted small mt-2 mb-0">
                                         <strong>Reservar</strong> guarda el asiento sin cobrar · <strong>Cobrar y emitir</strong> vende ahora
+                                        <?php if (!empty($data['pago_qr'])): ?> · <strong>QR</strong>: el pasajero paga desde su celular<?php endif; ?>
                                     </p>
                                 </form>
                             </div>
@@ -909,6 +961,55 @@
                 </div>
             </div>
         </div>
+
+        <?php if (!empty($data['pago_qr'])): $qr = $data['pago_qr']; ?>
+        <!-- MODAL COBRO CON QR -->
+        <div class="modal fade" id="modalCobroQr" tabindex="-1" aria-labelledby="tituloCobroQr" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="tituloCobroQr"><i class="fas fa-qrcode me-2"></i>Cobro con QR</h5>
+                        <span class="badge bg-warning-subtle text-warning-emphasis" id="qrEstadoBadge">Esperando pago</span>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-4 align-items-center">
+                            <div class="col-md-6 text-center">
+                                <img src="<?php echo htmlspecialchars($qr['imagen']); ?>" alt="Código QR para pagar" class="qr-cobro-img">
+                                <?php if ($qr['titular'] || $qr['entidad']): ?>
+                                    <div class="small text-muted mt-2">
+                                        <?php echo htmlspecialchars(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted small text-uppercase fw-bold">Monto a pagar</div>
+                                <div class="qr-cobro-monto">Bs. <span id="qrMonto">0.00</span></div>
+                                <div class="mt-2 small" id="qrDetalle"></div>
+                                <div class="mt-3 small">
+                                    Tiempo para pagar: <span class="qr-cobro-reloj" id="qrReloj">--:--</span>
+                                    <div class="text-muted">Si no se confirma a tiempo, el asiento se libera solo.</div>
+                                </div>
+                                <?php if ($qr['instrucciones']): ?>
+                                    <div class="alert alert-light border small mt-3 mb-3"><?php echo htmlspecialchars($qr['instrucciones']); ?></div>
+                                <?php endif; ?>
+                                <button type="button" class="btn btn-outline-secondary btn-sm w-100 mb-3" onclick="abrirPantallaPasajero()">
+                                    <i class="fas fa-desktop me-1"></i> Mostrar en la pantalla del pasajero
+                                </button>
+                                <label for="qrReferencia" class="form-label small fw-bold mb-1">N° de operación del comprobante <span class="text-muted fw-normal">(opcional)</span></label>
+                                <input type="text" class="form-control" id="qrReferencia" maxlength="60" placeholder="Ej. 000123456">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" onclick="cancelarCobroQr()">Cancelar cobro</button>
+                        <button type="button" class="btn btn-success fw-bold" id="btnConfirmarQr" onclick="confirmarCobroQr()">
+                            <i class="fas fa-check me-1"></i> Pago recibido · emitir boleto
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- MODAL GESTIÓN DE BOLETO (Edición/Confirmación) -->
         <div class="modal fade" id="modalGestionBoleto" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -1885,7 +1986,7 @@
             // Implementación solicitada: ControladorTransacciones + Ticket Térmico
 
             function procesarBoton(tipo) {
-                const accionTipo = (tipo === 1) ? 'venta' : 'reserva';
+                const accionTipo = (tipo === 1) ? 'venta' : (tipo === 3 ? 'qr' : 'reserva');
 
                 // ✅ SOLUCIÓN: Obtener viaje_id de forma robusta
                 // Prioridad: URL > Select > Variable Global
@@ -1932,7 +2033,7 @@
                 const rutaActual = $('#selected-route-display').text().trim() || 'Ruta no especificada';
 
                 Swal.fire({
-                    title: '¿Confirmar ' + (tipo === 1 ? 'Venta' : 'Reserva') + '?',
+                    title: tipo === 3 ? '¿Cobrar con QR?' : '¿Confirmar ' + (tipo === 1 ? 'Venta' : 'Reserva') + '?',
                     html: `
                         <div style="text-align: left; padding: 10px;">
                             <p><strong>🚌 Ruta:</strong> ${rutaActual}</p>
@@ -1946,7 +2047,7 @@
                     showCancelButton: true,
                     confirmButtonText: 'Sí, continuar',
                     cancelButtonText: 'Cancelar',
-                    confirmButtonColor: tipo === 1 ? '#28a745' : '#ffc107'
+                    confirmButtonColor: tipo === 1 ? '#28a745' : (tipo === 3 ? '#6366f1' : '#ffc107')
                 }).then((result) => {
                     if (result.isConfirmed) {
                         ejecutarTransaccion(idViaje, tipo, accionTipo, doc, nom, ape);
@@ -1956,7 +2057,161 @@
 
 
 
-            // ✅ Nueva función separada para ejecutar la transacción
+            // ---------------- Impresion del boleto (venta directa o cobro confirmado) ----------------
+            function imprimirBoleto(t) {
+                if (!t) return;
+                imprimirTicket({
+                    numeroBoleto: t.codigo_boleto,
+                    fechaViaje: t.fecha_salida,
+                    horaSalida: t.hora_salida,
+                    placaBus: t.bus_placa,
+                    origen: t.ciudad_origen || t.origen,
+                    destino: t.ciudad_destino || t.destino,
+                    asiento: t.numero_asiento,
+                    nombrePasajero: t.nombre_pasajero,
+                    documentoPasajero: t.numero_documento,
+                    fechaExpedicion: t.fecha_venta,
+                    importe: t.precio,
+                    empresaDireccion: 'Terminal BusDriver',
+                    empresaTelefono: '-'
+                });
+            }
+
+            // ---------------- Cobro con QR ----------------
+            let cobroQr = null; // { boletoId, viajeId, timer, poll, ventana }
+
+            function postTransaccion(payload) {
+                return fetch(`${URLROOT}/controladortransacciones/index`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify(Object.assign({ csrf_token: CSRF_TOKEN }, payload))
+                }).then(r => r.text()).then(texto => {
+                    const i = texto.indexOf('{'), j = texto.lastIndexOf('}');
+                    try { return JSON.parse(texto.substring(i, j + 1)); } catch (e) { return { status: 'error', msg: 'Respuesta inválida del servidor' }; }
+                });
+            }
+
+            function abrirCobroQr(ticket, viajeId) {
+                const modalEl = document.getElementById('modalCobroQr');
+                if (!modalEl || !ticket) return;
+
+                cerrarSeguimientoQr();
+                cobroQr = { boletoId: ticket.id_boleto, viajeId: viajeId, ticket: ticket };
+
+                document.getElementById('qrMonto').textContent = parseFloat(ticket.precio || 0).toFixed(2);
+                document.getElementById('qrDetalle').innerHTML =
+                    `<strong>Asiento ${ticket.numero_asiento}</strong> · ${escapeHtmlQr(ticket.nombre_pasajero || '')}<br>` +
+                    `${escapeHtmlQr(ticket.ciudad_origen || '')} → ${escapeHtmlQr(ticket.ciudad_destino || '')}`;
+                document.getElementById('qrReferencia').value = '';
+                marcarEstadoQr('Esperando pago', 'bg-warning-subtle text-warning-emphasis');
+                document.getElementById('btnConfirmarQr').disabled = false;
+
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                seguirCobroQr();
+            }
+
+            function seguirCobroQr() {
+                const actualizar = () => {
+                    if (!cobroQr) return;
+                    fetch(`${URLROOT}/ventas/estado_cobro/${cobroQr.boletoId}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then(r => r.json())
+                        .then(res => {
+                            if (!cobroQr || !res.success) return;
+                            const d = res.data;
+                            cobroQr.segundos = parseInt(d.segundos_restantes || 0, 10);
+                            if (d.estado === 'cancelado') {
+                                finalizarCobroQr('warning', 'El tiempo para pagar venció', 'El asiento se liberó. Si el pasajero ya pagó, vuelva a iniciar la venta y confírmela.');
+                            }
+                        })
+                        .catch(() => {});
+                };
+                actualizar();
+                cobroQr.poll = setInterval(actualizar, 5000);
+                cobroQr.timer = setInterval(() => {
+                    if (!cobroQr || cobroQr.segundos === undefined) return;
+                    cobroQr.segundos = Math.max(0, cobroQr.segundos - 1);
+                    const m = String(Math.floor(cobroQr.segundos / 60)).padStart(2, '0');
+                    const s = String(cobroQr.segundos % 60).padStart(2, '0');
+                    document.getElementById('qrReloj').textContent = `${m}:${s}`;
+                }, 1000);
+            }
+
+            function cerrarSeguimientoQr() {
+                if (!cobroQr) return;
+                clearInterval(cobroQr.poll);
+                clearInterval(cobroQr.timer);
+            }
+
+            function marcarEstadoQr(texto, clases) {
+                const badge = document.getElementById('qrEstadoBadge');
+                badge.textContent = texto;
+                badge.className = 'badge ' + clases;
+            }
+
+            function finalizarCobroQr(icono, titulo, texto) {
+                const viajeId = cobroQr ? cobroQr.viajeId : null;
+                cerrarSeguimientoQr();
+                cobroQr = null;
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCobroQr')).hide();
+                if (viajeId) {
+                    cargarDiagramaBus(viajeId);
+                    if (typeof cargarTablaPasajeros === 'function') cargarTablaPasajeros(viajeId);
+                }
+                if (titulo) Swal.fire({ icon: icono, title: titulo, text: texto });
+            }
+
+            function confirmarCobroQr() {
+                if (!cobroQr) return;
+                const btn = document.getElementById('btnConfirmarQr');
+                btn.disabled = true;
+                postTransaccion({
+                    accion: 'confirmar_pago',
+                    id_boleto: cobroQr.boletoId,
+                    metodo: 'QR',
+                    referencia: document.getElementById('qrReferencia').value.trim()
+                }).then(res => {
+                    if (res.status !== 'success') {
+                        btn.disabled = false;
+                        Swal.fire('No se pudo confirmar', res.msg || 'Error desconocido', 'error');
+                        return;
+                    }
+                    marcarEstadoQr('Pagado', 'bg-success');
+                    finalizarCobroQr('success', 'Pago confirmado', 'Boleto emitido.');
+                    imprimirBoleto(res.ticket);
+                });
+            }
+
+            function cancelarCobroQr() {
+                if (!cobroQr) return;
+                Swal.fire({
+                    icon: 'question',
+                    title: '¿Cancelar el cobro?',
+                    text: 'El asiento se libera. Use esta opción solo si el pasajero no pagó.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, cancelar cobro',
+                    cancelButtonText: 'Volver',
+                    confirmButtonColor: '#dc3545'
+                }).then(r => {
+                    if (!r.isConfirmed || !cobroQr) return;
+                    postTransaccion({ accion: 'cancelar_qr', id_boleto: cobroQr.boletoId }).then(res => {
+                        finalizarCobroQr(res.status === 'success' ? 'info' : 'warning',
+                            res.status === 'success' ? 'Cobro cancelado' : 'Aviso',
+                            res.status === 'success' ? 'El asiento quedó libre.' : res.msg);
+                    });
+                });
+            }
+
+            function abrirPantallaPasajero() {
+                if (!cobroQr) return;
+                window.open(`${URLROOT}/ventas/pantalla_qr/${cobroQr.boletoId}`, 'pantallaPasajero', 'width=900,height=700');
+            }
+
+            function escapeHtmlQr(t) {
+                const d = document.createElement('div');
+                d.textContent = t;
+                return d.innerHTML;
+            }
+
             // ✅ Nueva función separada para ejecutar la transacción
             function ejecutarTransaccion(idViaje, tipo, accionTipo, doc, nom, ape) {
                 // Payload con viaje_id validado
@@ -2014,6 +2269,17 @@
                         const res = parsearRespuestaServidor(rawResponse);
 
                         if (res.status === 'success') {
+
+                            if (accionTipo === 'qr') {
+                                Swal.close();
+                                if (typeof cargarDiagramaBus === 'function') cargarDiagramaBus(idViaje);
+                                limpiarFormulario(true);
+                                asientoSeleccionado = null;
+                                $('#inputAsiento').val('');
+                                $('#displayAsiento').text('--');
+                                abrirCobroQr(res.ticket, idViaje);
+                                return;
+                            }
 
                             // 1. Mostrar Alerta de Éxito (Timer 1.5s)
                             Swal.fire({

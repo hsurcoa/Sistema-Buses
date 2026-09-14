@@ -9,12 +9,75 @@ class Vehiculos extends Controller
         $this->vehiculoModel = $this->model('VehiculoModel');
     }
 
+    /** Marcas conocidas escritas de forma canonica (tambien corrige errores tipicos). */
+    private const MARCAS = [
+        'TOYOTA' => 'Toyota', 'TOYOYA' => 'Toyota', 'MERCEDES' => 'Mercedes-Benz', 'MERCEDES BENZ' => 'Mercedes-Benz',
+        'MERCEDES-BENZ' => 'Mercedes-Benz', 'VOLVO' => 'Volvo', 'SCANIA' => 'Scania', 'MARCOPOLO' => 'Marcopolo',
+        'HYUNDAI' => 'Hyundai', 'VOLKSWAGEN' => 'Volkswagen', 'VW' => 'Volkswagen', 'MAN' => 'MAN', 'IVECO' => 'Iveco',
+        'YUTONG' => 'Yutong', 'KING LONG' => 'King Long', 'HIGER' => 'Higer', 'NISSAN' => 'Nissan', 'MITSUBISHI' => 'Mitsubishi',
+        'HINO' => 'Hino', 'IRIZAR' => 'Irizar', 'BUSSCAR' => 'Busscar', 'COMIL' => 'Comil', 'FOTON' => 'Foton', 'JAC' => 'JAC',
+    ];
+
+    /**
+     * Normaliza y valida los datos de un bus. Devuelve el mensaje de error o null.
+     * La cantidad de asientos SIEMPRE sale del tipo de bus: asi el mapa de
+     * asientos de venta coincide con el bus real.
+     */
+    private function normalizarYValidar(array &$datos, int $id = 0): ?string
+    {
+        $datos['placa'] = strtoupper(preg_replace('/\s+/', '', $datos['placa']));
+        if (!preg_match('/^[A-Z0-9]{2,4}-?[A-Z0-9]{2,4}$/', $datos['placa'])) {
+            return 'La placa "' . $datos['placa'] . '" no es válida. Use letras y números, p. ej. 2345-ABC o ABC-123.';
+        }
+        if ($this->vehiculoModel->existePlacaEnOtro($datos['placa'], $id)) {
+            return 'La placa ' . $datos['placa'] . ' ya está registrada en otro bus.';
+        }
+
+        if (empty($datos['tipo_bus_id'])) {
+            return 'Seleccione el tipo de bus: define la cantidad y distribución de asientos.';
+        }
+        $tipo = $this->vehiculoModel->obtenerTipoBus($datos['tipo_bus_id']);
+        if (!$tipo) {
+            return 'El tipo de bus seleccionado no existe.';
+        }
+        $datos['asientos'] = (int) $tipo->capacidad;
+        if (empty($datos['pasajeros']) || (int) $datos['pasajeros'] < $datos['asientos']) {
+            $datos['pasajeros'] = $datos['asientos'];
+        }
+
+        if ($id) {
+            $maxOcupado = $this->vehiculoModel->maxAsientoOcupadoEnViajesPendientes($id);
+            if ($maxOcupado > $datos['asientos']) {
+                return "No se puede usar un tipo de {$datos['asientos']} asientos: este bus tiene viajes pendientes con el asiento {$maxOcupado} ya vendido o reservado.";
+            }
+        }
+
+        $marca = strtoupper(trim(preg_replace('/\s+/', ' ', $datos['marca'])));
+        if ($marca !== '') {
+            $datos['marca'] = self::MARCAS[$marca] ?? mb_convert_case(mb_strtolower($marca), MB_CASE_TITLE, 'UTF-8');
+        }
+
+        $datos['modelo'] = trim($datos['modelo']);
+        if (preg_match('/^(19|20)\d{2}$/', $datos['modelo'])) {
+            return 'El modelo "' . $datos['modelo'] . '" parece un año. Escriba el modelo de la carrocería o chasis (p. ej. Paradiso 1800, Coaster) y el año en el campo Año.';
+        }
+
+        if ($datos['anio'] !== '') {
+            $anio = (int) $datos['anio'];
+            if ($anio < 1970 || $anio > (int) date('Y') + 1) {
+                return 'El año del bus debe estar entre 1970 y ' . ((int) date('Y') + 1) . '.';
+            }
+        }
+
+        return null;
+    }
+
     public function guardar()
     {
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             // Limpiar cualquier salida previa para evitar corrupción del JSON
-            ob_clean();
+            if (ob_get_level() > 0) ob_clean();
 
             // Establecer headers para respuesta JSON
             header('Content-Type: application/json; charset=utf-8');
@@ -48,12 +111,16 @@ class Vehiculos extends Controller
                 'tipo_servicio' => trim($_POST['tipo_servicio'] ?? '')
             ];
 
-            // 2. Validación Básica
+            // 2. Validación
             if (empty($datos['placa']) || empty($datos['tarjeta_circulacion']) || empty($datos['tipo_bus_id'])) {
                 echo json_encode([
                     'status' => 'error',
                     'message' => 'Los campos Placa, Tarjeta de Circulación y Tipo de Bus son obligatorios.'
                 ]);
+                exit;
+            }
+            if ($error = $this->normalizarYValidar($datos)) {
+                echo json_encode(['status' => 'error', 'message' => $error]);
                 exit;
             }
 
@@ -152,7 +219,7 @@ class Vehiculos extends Controller
     {
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Limpiar cualquier salida previa
-            ob_clean();
+            if (ob_get_level() > 0) ob_clean();
 
             // Establecer headers para respuesta JSON
             header('Content-Type: application/json; charset=utf-8');
@@ -197,7 +264,7 @@ class Vehiculos extends Controller
     {
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Limpiar cualquier salida previa
-            ob_clean();
+            if (ob_get_level() > 0) ob_clean();
 
             // Establecer headers para respuesta JSON
             header('Content-Type: application/json; charset=utf-8');
@@ -209,6 +276,7 @@ class Vehiculos extends Controller
                 'propietario_apellidos' => trim($_POST['propietario_apellidos'] ?? ''),
                 'tarjeta_circulacion' => trim($_POST['tarjeta_circulacion'] ?? ''),
                 'placa' => trim($_POST['placa'] ?? ''),
+                'tipo_bus_id' => trim($_POST['tipo_bus_id'] ?? ''),
                 'clase' => trim($_POST['clase'] ?? ''),
                 'marca' => trim($_POST['marca'] ?? ''),
                 'anio' => trim($_POST['anio'] ?? ''),
@@ -239,10 +307,16 @@ class Vehiculos extends Controller
                 ]);
                 exit;
             }
+            if ($error = $this->normalizarYValidar($datos, (int) $datos['id'])) {
+                echo json_encode(['status' => 'error', 'message' => $error]);
+                exit;
+            }
 
             // Intentar actualizar en la base de datos
             try {
                 if ($this->vehiculoModel->actualizarBus($datos)) {
+                    // Los viajes pendientes con este bus pasan a usar su distribucion real
+                    $this->vehiculoModel->sincronizarTipoEnViajesPendientes($datos['id'], $datos['tipo_bus_id']);
                     // Éxito
                     echo json_encode([
                         'status' => 'success',
@@ -284,7 +358,7 @@ class Vehiculos extends Controller
     {
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Limpiar cualquier salida previa
-            ob_clean();
+            if (ob_get_level() > 0) ob_clean();
 
             // Establecer headers para respuesta JSON
             header('Content-Type: application/json; charset=utf-8');

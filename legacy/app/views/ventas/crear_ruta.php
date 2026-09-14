@@ -901,7 +901,9 @@
                 if (data.success && data.buses && data.buses.length > 0) {
                     let options = '<option value="">Seleccione Bus...</option>';
                     data.buses.forEach(bus => {
-                        options += `<option value="${bus.id}">${bus.placa} - Bus #${bus.numero_interno} (${bus.marca})</option>`;
+                        const detalle = [bus.marca, bus.modelo].filter(Boolean).join(' ');
+                        const chofer = bus.chofer_asignado ? ` · ${bus.chofer_asignado}` : ' · sin chofer asignado';
+                        options += `<option value="${bus.id}">${bus.placa} · ${detalle} · ${bus.asientos} asientos${chofer}</option>`;
                         console.log('✅ Bus disponible:', bus);
                     });
                     selectBus.innerHTML = options;
@@ -961,6 +963,19 @@
      * ✅ LOGICA DE ASIGNACIÓN: Cargar tripulación al seleccionar bus
      * VERSIÓN MEJORADA: Muestra información completa del bus
      */
+    // Choferes activos del personal (perfil Chofer). El asignado al bus va marcado.
+    const CHOFERES = <?php echo json_encode(array_map(fn($c) => ['id' => (int) $c->id, 'nombre' => trim($c->nombres . ' ' . $c->apellidos)], $data['choferes'] ?? []), JSON_UNESCAPED_UNICODE); ?>;
+
+    function opcionesChoferes(asignadoId) {
+        let html = asignadoId ? '' : '<option value="">Sin chofer asignado · seleccione uno</option>';
+        CHOFERES.forEach(c => {
+            const esAsignado = asignadoId && Number(asignadoId) === c.id;
+            const nombre = c.nombre.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+            html += `<option value="${c.id}" ${esAsignado ? 'selected' : ''}>${nombre}${esAsignado ? ' (asignado al bus)' : ''}</option>`;
+        });
+        return html;
+    }
+
     function cargarTripulacion(busId) {
         const selectChofer = document.getElementById('selectChofer');
 
@@ -990,8 +1005,8 @@
 
                     // ✅ Verificar si tiene chofer asignado
                     if (trip.chofer_id && trip.nombre_chofer) {
-                        // Tiene chofer asignado
-                        selectChofer.innerHTML = `<option value="${trip.chofer_id}" selected>${trip.nombre_chofer} (Asignado)</option>`;
+                        // Tiene chofer asignado: se preselecciona, pero se puede elegir otro solo para este viaje
+                        selectChofer.innerHTML = opcionesChoferes(trip.chofer_id);
 
                         // Feedback visual de éxito
                         const Toast = Swal.mixin({
@@ -1007,14 +1022,7 @@
                         });
                     } else {
                         // ✅ Bus sin chofer asignado (pero existe en la BD)
-                        selectChofer.innerHTML = '<option value="">⚠️ Sin conductor asignado - Seleccione uno</option>';
-
-                        // ⚠️ Opcional: Cargar lista de choferes disponibles
-                        <?php if (!empty($data['choferes'])): ?>
-                            <?php foreach ($data['choferes'] as $chofer): ?>
-                                selectChofer.innerHTML += '<option value="<?php echo $chofer->id; ?>"><?php echo $chofer->nombres . ' ' . $chofer->apellidos; ?></option>';
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                        selectChofer.innerHTML = opcionesChoferes(null);
 
                         // Advertencia visual
                         const Toast = Swal.mixin({

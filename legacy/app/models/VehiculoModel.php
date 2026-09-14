@@ -11,12 +11,12 @@ class VehiculoModel
     public function registrarVehiculo($datos)
     {
         $this->db->query('INSERT INTO vehiculos (
-            propietario_nombres, propietario_apellidos, tarjeta_circulacion, placa, clase, marca, anio, modelo,
+            propietario_nombres, propietario_apellidos, tarjeta_circulacion, placa, tipo_bus_id, clase, marca, anio, modelo,
             tipo_combustible, carroceria, ejes, color, nro_motor, cilindros, nro_serie, ruedas,
             peso_seco, peso_bruto, longitud, altura, ancho, pasajeros, asientos, tipo_servicio,
             estado, fecha_registro
         ) VALUES (
-            :propietario_nombres, :propietario_apellidos, :tarjeta_circulacion, :placa, :clase, :marca, :anio, :modelo,
+            :propietario_nombres, :propietario_apellidos, :tarjeta_circulacion, :placa, :tipo_bus_id, :clase, :marca, :anio, :modelo,
             :tipo_combustible, :carroceria, :ejes, :color, :nro_motor, :cilindros, :nro_serie, :ruedas,
             :peso_seco, :peso_bruto, :longitud, :altura, :ancho, :pasajeros, :asientos, :tipo_servicio,
             :estado, :fecha_registro
@@ -27,6 +27,7 @@ class VehiculoModel
         $this->db->bind(':propietario_apellidos', $datos['propietario_apellidos']);
         $this->db->bind(':tarjeta_circulacion', $datos['tarjeta_circulacion']);
         $this->db->bind(':placa', $datos['placa']);
+        $this->db->bind(':tipo_bus_id', $datos['tipo_bus_id'] ?: null);
         $this->db->bind(':clase', $datos['clase']);
         $this->db->bind(':marca', $datos['marca']);
         $this->db->bind(':anio', $datos['anio']);
@@ -75,8 +76,54 @@ class VehiculoModel
 
     public function listarVehiculos()
     {
-        $this->db->query('SELECT * FROM vehiculos WHERE estado = 1 ORDER BY id DESC');
+        $this->db->query('SELECT v.*, tb.nombre AS tipo_nombre, tb.capacidad AS tipo_capacidad, tb.pisos AS tipo_pisos
+                          FROM vehiculos v
+                          LEFT JOIN tipos_buses tb ON tb.id = v.tipo_bus_id
+                          WHERE v.estado = 1
+                          ORDER BY v.placa');
         return $this->db->resultSet();
+    }
+
+    public function obtenerTipoBus($id)
+    {
+        $this->db->query('SELECT id, nombre, capacidad, pisos, estado FROM tipos_buses WHERE id = :id');
+        $this->db->bind(':id', $id);
+        return $this->db->single() ?: null;
+    }
+
+    public function existePlacaEnOtro($placa, $excluirId = 0)
+    {
+        $this->db->query('SELECT id FROM vehiculos WHERE placa = :placa AND id <> :id');
+        $this->db->bind(':placa', $placa);
+        $this->db->bind(':id', (int) $excluirId);
+        return (bool) $this->db->single();
+    }
+
+    /**
+     * Mayor numero de asiento vendido/reservado en viajes aun no realizados con
+     * este bus: el tipo de bus nuevo no puede tener menos asientos que eso.
+     */
+    public function maxAsientoOcupadoEnViajesPendientes($vehiculoId)
+    {
+        $this->db->query("SELECT MAX(b.numero_asiento) AS max_asiento
+                          FROM boletos b
+                          JOIN viajes vi ON vi.id = b.viaje_id
+                          WHERE vi.bus_id = :id
+                            AND LOWER(vi.estado) NOT IN ('finalizado', 'cancelado', 'inactivo')
+                            AND b.estado IN ('vendido', 'reservado')");
+        $this->db->bind(':id', $vehiculoId);
+        $r = $this->db->single();
+        return $r ? (int) $r->max_asiento : 0;
+    }
+
+    /** Viajes pendientes con este bus: al cambiarle el tipo se actualiza su distribucion. */
+    public function sincronizarTipoEnViajesPendientes($vehiculoId, $tipoBusId)
+    {
+        $this->db->query("UPDATE viajes SET tipo_bus_id = :tipo
+                          WHERE bus_id = :id AND LOWER(estado) NOT IN ('finalizado', 'cancelado', 'inactivo')");
+        $this->db->bind(':tipo', $tipoBusId);
+        $this->db->bind(':id', $vehiculoId);
+        return $this->db->execute();
     }
 
     /**
@@ -103,6 +150,7 @@ class VehiculoModel
             propietario_apellidos = :propietario_apellidos,
             tarjeta_circulacion = :tarjeta_circulacion,
             placa = :placa,
+            tipo_bus_id = :tipo_bus_id,
             clase = :clase,
             marca = :marca,
             anio = :anio,
@@ -131,6 +179,7 @@ class VehiculoModel
         $this->db->bind(':propietario_apellidos', $datos['propietario_apellidos']);
         $this->db->bind(':tarjeta_circulacion', $datos['tarjeta_circulacion']);
         $this->db->bind(':placa', $datos['placa']);
+        $this->db->bind(':tipo_bus_id', $datos['tipo_bus_id'] ?: null);
         $this->db->bind(':clase', $datos['clase']);
         $this->db->bind(':marca', $datos['marca']);
         $this->db->bind(':anio', $datos['anio']);

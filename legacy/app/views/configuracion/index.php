@@ -77,6 +77,80 @@
                             </form>
                         </div>
                     </div>
+
+                    <?php
+                    $cfg = $data['config'];
+                    $esAdmin = ($_SESSION['rol'] ?? '') === 'Administrador';
+                    $qrActivo = !empty($cfg['pago_qr_activo']) && !empty($cfg['pago_qr_imagen']);
+                    ?>
+                    <div class="card shadow-sm border-0 rounded-4 mt-4" id="cobro-qr">
+                        <div class="card-header bg-white py-3">
+                            <h5 class="card-title fw-bold mb-0"><i class="bi bi-qr-code me-2"></i>Cobro con QR</h5>
+                            <div class="card-tools">
+                                <span class="badge <?php echo $qrActivo ? 'bg-success' : 'bg-secondary'; ?>"><?php echo $qrActivo ? 'Activo' : 'Inactivo'; ?></span>
+                            </div>
+                        </div>
+                        <div class="card-body p-4">
+                            <p class="text-muted small mb-4">
+                                Al vender, el vendedor puede elegir <strong>Cobrar con QR</strong>: el asiento se reserva unos minutos y se muestra este QR con el monto
+                                (también en una segunda pantalla para el pasajero). Cuando el pago llega a la cuenta, el vendedor lo confirma y se imprime el boleto.
+                                En el arqueo, los cobros QR se informan aparte del efectivo.
+                            </p>
+
+                            <?php if (!$esAdmin): ?>
+                                <div class="alert alert-secondary mb-0">
+                                    <i class="bi bi-lock-fill me-1"></i> Solo un usuario con rol <strong>Administrador</strong> puede cambiar el QR de cobro.
+                                </div>
+                            <?php else: ?>
+                                <form action="<?php echo URLROOT; ?>/configuracion/guardar_qr" method="POST" enctype="multipart/form-data">
+                                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                                    <div class="row g-4">
+                                        <div class="col-md-4 text-center">
+                                            <div class="p-3 border rounded-3 bg-light d-flex align-items-center justify-content-center" style="min-height: 220px;">
+                                                <?php if (!empty($cfg['pago_qr_imagen'])): ?>
+                                                    <img src="<?php echo URLROOT . '/' . htmlspecialchars($cfg['pago_qr_imagen']); ?>" alt="QR de cobro actual" class="img-fluid" style="max-height: 200px;">
+                                                <?php else: ?>
+                                                    <div class="text-muted"><i class="bi bi-qr-code fs-1"></i><br>Sin QR cargado</div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-8">
+                                            <div class="mb-3">
+                                                <label class="form-label" for="pago_qr_imagen">Imagen del QR</label>
+                                                <input class="form-control" type="file" id="pago_qr_imagen" name="pago_qr_imagen" accept="image/png,image/jpeg,image/webp">
+                                                <div class="form-text">PNG, JPG o WEBP, máximo 2 MB. Use el QR descargado de la app del banco (sin recortar el código).</div>
+                                            </div>
+                                            <div class="row g-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label" for="pago_qr_titular">Titular de la cuenta</label>
+                                                    <input class="form-control" id="pago_qr_titular" name="pago_qr_titular" maxlength="120" value="<?php echo htmlspecialchars($cfg['pago_qr_titular'] ?? ''); ?>" placeholder="Nombre del dueño">
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label" for="pago_qr_entidad">Banco / billetera</label>
+                                                    <input class="form-control" id="pago_qr_entidad" name="pago_qr_entidad" maxlength="120" value="<?php echo htmlspecialchars($cfg['pago_qr_entidad'] ?? ''); ?>" placeholder="Ej. Banco Unión, Tigo Money">
+                                                </div>
+                                                <div class="col-md-8">
+                                                    <label class="form-label" for="pago_qr_instrucciones">Instrucciones para el pasajero</label>
+                                                    <input class="form-control" id="pago_qr_instrucciones" name="pago_qr_instrucciones" maxlength="300" value="<?php echo htmlspecialchars($cfg['pago_qr_instrucciones'] ?? ''); ?>">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label class="form-label" for="pago_qr_minutos">Minutos para pagar</label>
+                                                    <input class="form-control" type="number" min="3" max="60" id="pago_qr_minutos" name="pago_qr_minutos" value="<?php echo (int) ($cfg['pago_qr_minutos'] ?? 15); ?>">
+                                                </div>
+                                            </div>
+                                            <div class="form-check form-switch mt-3">
+                                                <input class="form-check-input" type="checkbox" role="switch" id="pago_qr_activo" name="pago_qr_activo" value="1" <?php echo !empty($cfg['pago_qr_activo']) ? 'checked' : ''; ?>>
+                                                <label class="form-check-label" for="pago_qr_activo">Permitir cobrar con QR en la venta de pasajes</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-end mt-4">
+                                        <button type="submit" class="btn btn-primary px-4 rounded-pill fw-bold"><i class="bi bi-save me-2"></i>Guardar QR</button>
+                                    </div>
+                                </form>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -89,6 +163,20 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Verificar si hay mensaje de éxito en la URL
         const urlParams = new URLSearchParams(window.location.search);
+        const mensajesQr = {
+            qr_guardado: ['success', 'QR de cobro guardado', ''],
+            qr_sin_imagen: ['warning', 'Datos guardados', 'Para activar el cobro con QR primero cargue la imagen del QR.'],
+            qr_formato: ['error', 'Imagen no válida', 'Suba una imagen PNG, JPG o WEBP del QR.'],
+            qr_tamano: ['error', 'Imagen muy pesada', 'La imagen del QR debe pesar como máximo 2 MB.'],
+            qr_sin_permiso: ['error', 'Sin permiso', 'Solo un Administrador puede cambiar el QR de cobro.'],
+            qr_error: ['error', 'No se pudo guardar', 'Intente nuevamente.'],
+            csrf: ['error', 'Sesión inválida', 'Recargue la página e intente nuevamente.'],
+        };
+        if (mensajesQr[urlParams.get('msg')]) {
+            const [icon, title, text] = mensajesQr[urlParams.get('msg')];
+            Swal.fire({ icon, title, text });
+            window.history.replaceState({}, document.title, window.location.pathname + '#cobro-qr');
+        }
         if (urlParams.has('msg') && urlParams.get('msg') === 'guardado') {
             Swal.fire({
                 title: '¡Guardado!',

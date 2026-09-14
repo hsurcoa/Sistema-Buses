@@ -431,7 +431,7 @@ class Admin extends Controller
 
         // ⭐ NUEVO: Cargar tipos de buses para el formulario
         $tipoBusModel = $this->model('TipoBusModel');
-        $tipos_buses = $tipoBusModel->listarTiposBuses();  // ✅ CORREGIDO
+        $tipos_buses = $tipoBusModel->listarTiposParaFlota();
 
         $data = [
             'title' => 'Registrar Buses',
@@ -447,12 +447,15 @@ class Admin extends Controller
 
     public function asignar_buses()
     {
+        $historial = !empty($_GET['historial']);
+
         $data = [
             'title' => 'Asignar Buses',
             'choferes' => $this->asignacionModel->obtenerChoferes(),
             'copilotos' => $this->asignacionModel->obtenerCopilotos(),
             'buses' => $this->asignacionModel->obtenerBuses(),
-            'asignaciones' => $this->asignacionModel->listarAsignaciones()
+            'asignaciones' => $this->asignacionModel->listarAsignaciones($historial),
+            'historial' => $historial,
         ];
 
         $this->view('layouts/header', $data);
@@ -461,59 +464,66 @@ class Admin extends Controller
         $this->view('layouts/footer', $data);
     }
 
+    /**
+     * Crear o editar una asignacion (AJAX).
+     * Responde status: success | error | conflict. En "conflict" el frontend
+     * muestra los choques y, si el usuario confirma, reenvia con reemplazar=1.
+     */
     public function guardar_asignacion()
     {
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Location: ' . URLROOT . '/admin/asignar_buses');
+            return;
+        }
 
-            // Limpiar cualquier salida previa para evitar corrupción del JSON
-            ob_clean();
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json; charset=utf-8');
 
-            // Establecer headers para respuesta JSON
-            header('Content-Type: application/json; charset=utf-8');
+        $datos = [
+            'id' => trim($_POST['id'] ?? ''),
+            'chofer_id' => trim($_POST['chofer_id'] ?? ''),
+            'bus_id' => trim($_POST['bus_id'] ?? ''),
+            'copiloto_id' => trim($_POST['copiloto_id'] ?? ''),
+        ];
+        $reemplazar = !empty($_POST['reemplazar']);
 
-            // Recoger datos del formulario
-            $chofer_id = $_POST['chofer_id'] ?? '';
-            $bus_id = $_POST['bus_id'] ?? '';
-            $copiloto_id = !empty($_POST['copiloto_id']) ? $_POST['copiloto_id'] : null;
+        if ($datos['chofer_id'] === '' || $datos['bus_id'] === '') {
+            echo json_encode(['status' => 'error', 'message' => 'El chofer y el bus son obligatorios.']);
+            exit;
+        }
 
-            // Validación básica (Solo chofer y bus son obligatorios)
-            if (empty($chofer_id) || empty($bus_id)) {
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'El Chofer y el Bus son obligatorios.'
-                ]);
+        try {
+            $validacion = $this->asignacionModel->validar($datos);
+            if ($validacion['errores']) {
+                echo json_encode(['status' => 'error', 'message' => implode(' ', $validacion['errores'])]);
                 exit;
             }
 
-            // Intentar guardar la asignación
-            try {
-                if ($this->asignacionModel->crearAsignacion($chofer_id, $bus_id, $copiloto_id)) {
-                    // ÉXITO
-                    echo json_encode([
-                        'status' => 'success',
-                        'message' => 'El bus ha sido asignado a la ruta correctamente.'
-                    ]);
-                } else {
-                    // ERROR GENÉRICO
-                    echo json_encode([
-                        'status' => 'error',
-                        'message' => 'Error al guardar la asignación. Por favor, intente nuevamente.'
-                    ]);
-                }
-            } catch (Exception $e) {
-                // SEGURIDAD: Loggear error real y ocultar detalle al usuario
-                error_log("Error en Admin::guardar_asignacion: " . $e->getMessage());
-
+            $choques = array_filter($validacion['conflictos'], fn($c) => strpos($c, 'Aviso:') !== 0);
+            if ($choques && !$reemplazar) {
                 echo json_encode([
-                    'status' => 'error',
-                    'message' => 'Ocurrió un error interno al procesar la asignación.'
-                ]);
+                    'status' => 'conflict',
+                    'message' => 'Hay asignaciones activas que chocan con esta.',
+                    'conflictos' => $validacion['conflictos'],
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
             }
-            exit;
-        } else {
-            header('Location: ' . URLROOT . '/admin/asignar_buses');
+
+            $this->asignacionModel->guardar($datos, $reemplazar);
+
+            $avisos = array_values(array_filter($validacion['conflictos'], fn($c) => strpos($c, 'Aviso:') === 0));
+            echo json_encode([
+                'status' => 'success',
+                'message' => $datos['id'] ? 'Asignación actualizada.' : 'Asignación registrada.',
+                'avisos' => $avisos,
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            error_log('Admin::guardar_asignacion: ' . $e->getMessage());
+            echo json_encode(['status' => 'error', 'message' => 'Ocurrió un error interno al guardar la asignación.']);
         }
+        exit;
     }
+
     public function registrar_terminal()
     {
         $terminales = $this->terminalModel->listarTerminales();
@@ -583,117 +593,43 @@ class Admin extends Controller
         header('Location: ' . URLROOT . '/admin/registrar_terminal');
     }
 
+    /** Finaliza la asignacion: no se borra, queda en el historial. */
     public function eliminar_asignacion($id)
     {
-        if ($this->asignacionModel->eliminarAsignacion($id)) {
-            // Optional: You could set a session flash message here
-        }
+        $this->asignacionModel->finalizarAsignacion($id);
         header('Location: ' . URLROOT . '/admin/asignar_buses');
     }
 
-    /**
-     * Método para obtener los datos de una asignación específica (AJAX)
-     */
+    /** Datos de una asignacion para editarla (AJAX). */
     public function obtener_asignacion()
     {
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            // Limpiar cualquier salida previa
-            ob_clean();
-
-            // Establecer headers para respuesta JSON
-            header('Content-Type: application/json; charset=utf-8');
-
-            // Obtener el ID de la asignación
-            $id = isset($_POST['id']) ? trim($_POST['id']) : '';
-
-            // Validar que se recibió el ID
-            if (empty($id)) {
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'No se proporcionó el ID de la asignación.'
-                ]);
-                exit;
-            }
-
-            // Obtener los datos de la asignación desde el modelo
-            $asignacion = $this->asignacionModel->obtenerAsignacionPorId($id);
-
-            if ($asignacion) {
-                echo json_encode([
-                    'status' => 'success',
-                    'id_chofer' => $asignacion->chofer_id,
-                    'id_bus' => $asignacion->bus_id,
-                    'id_copiloto' => $asignacion->copiloto_id
-                ]);
-            } else {
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'No se encontró la asignación con el ID proporcionado.'
-                ]);
-            }
-            exit;
-        } else {
-            // Si intentan entrar por GET
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             header('Location: ' . URLROOT . '/admin/asignar_buses');
+            return;
         }
+
+        if (ob_get_length()) ob_clean();
+        header('Content-Type: application/json; charset=utf-8');
+
+        $asignacion = $this->asignacionModel->obtenerAsignacionPorId(trim($_POST['id'] ?? ''));
+        if (!$asignacion) {
+            echo json_encode(['status' => 'error', 'message' => 'No se encontró la asignación.']);
+            exit;
+        }
+
+        echo json_encode([
+            'status' => 'success',
+            'id_chofer' => $asignacion->chofer_id,
+            'id_bus' => $asignacion->bus_id,
+            'id_copiloto' => $asignacion->copiloto_id,
+        ]);
+        exit;
     }
 
-    /**
-     * Método para actualizar los datos de una asignación (AJAX)
-     */
+    /** Compatibilidad: la edicion usa la misma logica y validaciones que el alta. */
     public function editar_asignacion()
     {
-        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-            // Limpiar cualquier salida previa
-            ob_clean();
-
-            // Establecer headers para respuesta JSON
-            header('Content-Type: application/json; charset=utf-8');
-
-            // Recoger datos del formulario
-            $datos = [
-                'id' => trim($_POST['id'] ?? ''),
-                'chofer_id' => trim($_POST['chofer_id'] ?? ''),
-                'bus_id' => trim($_POST['bus_id'] ?? ''),
-                'copiloto_id' => !empty($_POST['copiloto_id']) ? $_POST['copiloto_id'] : null
-            ];
-
-            // Validación básica
-            if (empty($datos['id']) || empty($datos['chofer_id']) || empty($datos['bus_id'])) {
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'Chofer y Bus son obligatorios.'
-                ]);
-                exit;
-            }
-
-            // Intentar actualizar en la base de datos
-            try {
-                if ($this->asignacionModel->actualizarAsignacion($datos)) {
-                    // Éxito
-                    echo json_encode([
-                        'status' => 'success',
-                        'message' => 'La asignación ha sido actualizada correctamente.'
-                    ]);
-                } else {
-                    // Fallo genérico
-                    echo json_encode([
-                        'status' => 'error',
-                        'message' => 'Ocurrió un error al actualizar la asignación. Por favor, intente nuevamente.'
-                    ]);
-                }
-            } catch (Exception $e) {
-                // Capturar errores
-                echo json_encode([
-                    'status' => 'error',
-                    'message' => 'Error al actualizar la asignación: ' . $e->getMessage()
-                ]);
-            }
-            exit;
-        } else {
-            // Si intentan entrar por GET
-            header('Location: ' . URLROOT . '/admin/asignar_buses');
-        }
+        $this->guardar_asignacion();
     }
 
     public function registrar_serie_boletos()
@@ -916,7 +852,7 @@ class Admin extends Controller
     {
         if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Limpiar cualquier salida previa
-            ob_clean();
+            if (ob_get_level() > 0) ob_clean();
 
             // Establecer headers para respuesta JSON
             header('Content-Type: application/json; charset=utf-8');
@@ -1202,7 +1138,7 @@ class Admin extends Controller
     public function obtener_info_ruta_json($rutaId)
     {
         // Limpiar buffer para asegurar JSON puro
-        ob_clean();
+        if (ob_get_level() > 0) ob_clean();
         header('Content-Type: application/json');
 
         if (empty($rutaId)) {
@@ -1243,7 +1179,7 @@ class Admin extends Controller
      */
     public function cotizar_envio()
     {
-        ob_clean();
+        if (ob_get_level() > 0) ob_clean();
         header('Content-Type: application/json');
 
         $json = file_get_contents('php://input');

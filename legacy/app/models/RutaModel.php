@@ -31,6 +31,8 @@ class RutaModel
     public function obtenerAsientosOcupados($viajeId)
     {
         try {
+            $this->liberarCobrosQrVencidos($viajeId);
+
             // Consultar asientos vendidos o reservados desde la tabla CORRECTA 'boletos'
             $this->db->query("SELECT id, numero_asiento, estado FROM boletos WHERE viaje_id = :viaje_id AND estado IN ('vendido', 'reservado')");
             $this->db->bind(':viaje_id', $viajeId);
@@ -301,6 +303,64 @@ class RutaModel
             $busId = !empty($data['bus_id']) ? $data['bus_id'] : null;
             $choferId = !empty($data['chofer_id']) ? $data['chofer_id'] : null;
 
+            if ($busId) {
+                // El mapa de asientos debe ser el del bus real: el tipo del viaje sale del bus.
+                $this->db->query("SELECT v.placa, v.estado, v.tipo_bus_id, tb.capacidad
+                                  FROM vehiculos v LEFT JOIN tipos_buses tb ON tb.id = v.tipo_bus_id
+                                  WHERE v.id = :id");
+                $this->db->bind(':id', $busId);
+                $bus = $this->db->single();
+                if (!$bus || $bus->estado != 1) {
+                    return "El bus seleccionado no existe o está dado de baja.";
+                }
+                if (!$bus->tipo_bus_id) {
+                    return "El bus {$bus->placa} no tiene tipo de bus (asientos) definido. Complételo en Gestión de Flota.";
+                }
+                $data['tipo_bus_id'] = $bus->tipo_bus_id;
+
+                // Chofer por defecto: el asignado al bus
+                if (!$choferId) {
+                    $this->db->query("SELECT chofer_id FROM asignaciones_buses WHERE bus_id = :id AND estado = 1 LIMIT 1");
+                    $this->db->bind(':id', $busId);
+                    $asig = $this->db->single();
+                    $choferId = $asig->chofer_id ?? null;
+                }
+            }
+
+            if (!empty($data['id'])) {
+                // No achicar el bus por debajo de un asiento ya vendido/reservado
+                $this->db->query("SELECT tb.capacidad,
+                                         (SELECT MAX(b.numero_asiento) FROM boletos b WHERE b.viaje_id = :vid AND b.estado IN ('vendido','reservado')) AS max_asiento
+                                  FROM tipos_buses tb WHERE tb.id = :tipo");
+                $this->db->bind(':vid', $data['id']);
+                $this->db->bind(':tipo', $data['tipo_bus_id']);
+                $cap = $this->db->single();
+                if ($cap && (int) $cap->max_asiento > (int) $cap->capacidad) {
+                    return "No se puede cambiar a un bus de {$cap->capacidad} asientos: el viaje ya tiene vendido o reservado el asiento {$cap->max_asiento}.";
+                }
+            }
+
+            if ($choferId) {
+                $this->db->query("SELECT nombres, apellidos, perfil, estado FROM personal WHERE id = :id");
+                $this->db->bind(':id', $choferId);
+                $chofer = $this->db->single();
+                if (!$chofer || $chofer->estado != 1 || $chofer->perfil !== 'Chofer') {
+                    return "El conductor seleccionado no es un chofer activo del personal.";
+                }
+
+                // Un chofer no puede salir en dos viajes a la misma hora
+                $this->db->query("SELECT v.id, r.origen, r.destino FROM viajes v JOIN rutas r ON r.id = v.ruta_id
+                                  WHERE v.chofer_id = :chofer AND v.fecha_salida = :salida AND v.id <> :id
+                                    AND LOWER(v.estado) NOT IN ('finalizado', 'cancelado', 'inactivo')
+                                  LIMIT 1");
+                $this->db->bind(':chofer', $choferId);
+                $this->db->bind(':salida', $fechaHoraSalida);
+                $this->db->bind(':id', (int) ($data['id'] ?? 0));
+                if ($choque = $this->db->single()) {
+                    return "{$chofer->nombres} {$chofer->apellidos} ya sale a esa hora en el viaje #{$choque->id} ({$choque->origen} - {$choque->destino}).";
+                }
+            }
+
             // Determinar si es actualización o inserción
             if (!empty($data['id'])) {
                 // Actualizar viaje existente
@@ -362,10 +422,8 @@ class RutaModel
             $this->db->bind(':estado', $data['estado'] ?? 'Programado');
 
             if ($this->db->execute()) {
-                // ✅ ACTUALIZACIÓN DINÁMICA: Si se seleccionó bus y chofer, actualizar la asignación permanente
-                if ($busId && $choferId) {
-                    $this->actualizarAsignacionBus($busId, $choferId);
-                }
+                // El chofer del viaje NO cambia la asignacion permanente del bus
+                // (antes se sobrescribia en silencio). Eso se gestiona en Asignar Buses.
                 return true;
             } else {
                 return "Error al guardar la ruta de viaje";
@@ -376,137 +434,57 @@ class RutaModel
     }
 
     /**
-     * Obtener buses disponibles por tipo de bus
+     * Buses activos de un tipo, con su tripulacion por defecto.
+     * (Antes el filtro por tipo estaba deshabilitado porque vehiculos no tenia
+     * tipo_bus_id, y se ofrecian buses de cualquier capacidad.)
      */
     public function obtenerBusesPorTipo($tipoBusId)
     {
-        /* 
-           CORRECCIÓN APLICADA: Adaptación a estructura real de tabla 'vehiculos'.
-           
-           1. Se elimina 'numero_interno' (no existe) -> Se usa 'id' como fallback.
-           2. Se elimina filtro 'tipo_bus_id' (no existe) -> Se muestran todos los buses activos.
-           3. Se añaden campos útiles existentes: 'modelo', 'asientos', 'tipo_servicio'.
-        */
-        $this->db->query("SELECT id, placa, marca, modelo, asientos, tipo_servicio, id as numero_interno FROM vehiculos WHERE estado = 1");
-        // $this->db->bind(':tipo_id', $tipoBusId); // Filtro deshabilitado temporalmente por incompatibilidad de esquema
+        $this->db->query("SELECT v.id, v.placa, v.marca, v.modelo, v.asientos, v.tipo_servicio, v.id AS numero_interno,
+                                 CONCAT(c.nombres, ' ', c.apellidos) AS chofer_asignado
+                          FROM vehiculos v
+                          LEFT JOIN asignaciones_buses ab ON ab.bus_id = v.id AND ab.estado = 1
+                          LEFT JOIN personal c ON c.id = ab.chofer_id
+                          WHERE v.estado = 1 AND v.tipo_bus_id = :tipo
+                          ORDER BY v.placa");
+        $this->db->bind(':tipo', $tipoBusId);
         return $this->db->resultSet();
     }
 
     /**
-     * Obtener tripulación asignada a un bus (desde asignaciones_buses)
-     * ✅ VERSIÓN MEJORADA CON AUTO-CREACIÓN Y DATOS COMPLETOS DEL BUS
-     * 
-     * Funcionalidad:
-     * 1. Busca la asignación existente
-     * 2. Si no existe, la crea automáticamente (failsafe)
-     * 3. Retorna información completa del bus (placa, chofer, tipo, etc.)
-     * 
-     * @param int $busId ID del bus
-     * @return object|false Datos de la tripulación y bus, o false si el bus no existe
+     * Datos del bus y su tripulacion por defecto (asignaciones_buses -> personal).
+     * Antes tomaba los nombres de `usuarios` (ids de otra tabla) e intentaba
+     * crear asignaciones con chofer NULL cuando el bus no tenia una.
      */
     public function obtenerTripulacionBus($busId)
     {
         try {
-            // Primero intentar obtener la asignación existente con toda la info del bus
-            // CORRECCIÓN: Adaptado para tabla 'vehiculos' sin 'numero_interno' ni 'tipo_bus_id'
             $this->db->query("
-                SELECT 
-                    -- Datos de la asignación
-                    ab.bus_id,
+                SELECT
+                    v.id AS bus_id,
                     ab.chofer_id,
-                    CONCAT(u.nombres, ' ', u.apellidos) as nombre_chofer,
+                    CONCAT(c.nombres, ' ', c.apellidos) AS nombre_chofer,
                     ab.copiloto_id,
-                    CONCAT(u2.nombres, ' ', u2.apellidos) as nombre_copiloto,
-                    
-                    -- ✅ Información completa del bus (Desde vehiculos)
-                    b.placa as bus_placa,
-                    b.id as bus_numero,  -- Fallback: ID en lugar de numero_interno
-                    b.marca as bus_marca,
-                    b.modelo as bus_modelo,
-                    
-                    -- ✅ Información del tipo de bus (Mapeada desde vehiculos)
-                    b.tipo_servicio as tipo_bus, -- Fallback: tipo_servicio en lugar de join con tipos_buses
-                    1 as bus_pisos,              -- Default: 1 piso
-                    b.asientos as bus_capacidad  -- Capacidad directa de vehiculos
-                    
-                FROM asignaciones_buses ab
-                INNER JOIN vehiculos b ON ab.bus_id = b.id
-                -- LEFT JOIN tipos_buses tb ON b.tipo_bus_id = tb.id -- REMOVIDO: No hay FK
-                LEFT JOIN usuarios u ON ab.chofer_id = u.id
-                LEFT JOIN usuarios u2 ON ab.copiloto_id = u2.id
-                WHERE ab.bus_id = :bus_id AND ab.estado = 1
+                    CONCAT(cp.nombres, ' ', cp.apellidos) AS nombre_copiloto,
+                    v.placa AS bus_placa,
+                    v.id AS bus_numero,
+                    v.marca AS bus_marca,
+                    v.modelo AS bus_modelo,
+                    COALESCE(tb.nombre, v.tipo_servicio) AS tipo_bus,
+                    COALESCE(tb.pisos, 1) AS bus_pisos,
+                    COALESCE(tb.capacidad, v.asientos) AS bus_capacidad
+                FROM vehiculos v
+                LEFT JOIN tipos_buses tb ON tb.id = v.tipo_bus_id
+                LEFT JOIN asignaciones_buses ab ON ab.bus_id = v.id AND ab.estado = 1
+                LEFT JOIN personal c ON c.id = ab.chofer_id
+                LEFT JOIN personal cp ON cp.id = ab.copiloto_id
+                WHERE v.id = :bus_id
                 LIMIT 1
             ");
             $this->db->bind(':bus_id', $busId);
-            $resultado = $this->db->single();
-
-            // ✅ AUTO-CREACIÓN: Si no existe asignación, crearla automáticamente
-            if (!$resultado) {
-                error_log("⚠️ AVISO: Bus ID $busId no tiene asignación de tripulación. Creando asignación automática...");
-
-                // Verificar que el bus existe antes de crear la asignación
-                $this->db->query("SELECT id FROM vehiculos WHERE id = :bus_id");
-                $this->db->bind(':bus_id', $busId);
-                $busExiste = $this->db->single();
-
-                if (!$busExiste) {
-                    error_log("❌ ERROR: Bus ID $busId no existe en la base de datos");
-                    return false;
-                }
-
-                // Crear asignación vacía (sin chofer asignado aún)
-                $this->db->query("
-                    INSERT INTO asignaciones_buses (bus_id, chofer_id, copiloto_id, estado, fecha_asignacion)
-                    VALUES (:bus_id, NULL, NULL, 1, NOW())
-                ");
-                $this->db->bind(':bus_id', $busId);
-
-                if ($this->db->execute()) {
-                    error_log("✅ Asignación creada exitosamente para bus ID $busId");
-
-                    // Obtener la información del bus (sin chofer)
-                    // CORRECCIÓN: Adaptado para tabla 'vehiculos'
-                    $this->db->query("
-                        SELECT 
-                            b.id as bus_id,
-                            NULL as chofer_id,
-                            NULL as nombre_chofer,
-                            NULL as copiloto_id,
-                            NULL as nombre_copiloto,
-                            b.placa as bus_placa,
-                            b.id as bus_numero, -- Utilizar ID como número
-                            b.marca as bus_marca,
-                            b.modelo as bus_modelo,
-                            b.tipo_servicio as tipo_bus,
-                            1 as bus_pisos,
-                            b.asientos as bus_capacidad
-                        FROM vehiculos b
-                        -- LEFT JOIN tipos_buses tb ON b.tipo_bus_id = tb.id
-                        WHERE b.id = :bus_id
-                        LIMIT 1
-                    ");
-                    $this->db->bind(':bus_id', $busId);
-                    $resultado = $this->db->single();
-                } else {
-                    error_log("❌ ERROR: No se pudo crear asignación para bus ID $busId");
-                    return false;
-                }
-            }
-
-            if ($resultado) {
-                // SANITIZACIÓN: Si hay ID de chofer pero no se encontró nombre (usuario borrado),
-                // forzamos NULL para permitir reasignación en el frontend.
-                if (!empty($resultado->chofer_id) && empty($resultado->nombre_chofer)) {
-                    $resultado->chofer_id = null;
-                }
-            }
-
-            return $resultado;
+            return $this->db->single() ?: false;
         } catch (PDOException $e) {
-            error_log("❌ ERROR SQL en obtenerTripulacionBus: " . $e->getMessage());
-            return false;
-        } catch (Exception $e) {
-            error_log("❌ ERROR GENERAL en obtenerTripulacionBus: " . $e->getMessage());
+            error_log('RutaModel::obtenerTripulacionBus: ' . $e->getMessage());
             return false;
         }
     }
@@ -535,7 +513,7 @@ class RutaModel
                     tb.capacidad,
                     to_term.nombre_sede as terminal_origen,
                     td_term.nombre_sede as terminal_destino,
-                    CONCAT(u1.nombres, ' ', u1.apellidos) as chofer_nombre,
+                    CONCAT(u1.nombres, ' ', u1.apellidos) as chofer_nombre, -- u1 = personal (viajes.chofer_id -> personal)
                     b.placa as bus_placa,
                     b.id as bus_numero
                 FROM viajes v
@@ -543,7 +521,7 @@ class RutaModel
                 LEFT JOIN tipos_buses tb ON v.tipo_bus_id = tb.id
                 LEFT JOIN terminales to_term ON v.terminal_origen_id = to_term.id
                 LEFT JOIN terminales td_term ON v.terminal_destino_id = td_term.id
-                LEFT JOIN usuarios u1 ON v.chofer_id = u1.id
+                LEFT JOIN personal u1 ON v.chofer_id = u1.id
                 LEFT JOIN vehiculos b ON v.bus_id = b.id
                 WHERE v.estado NOT IN ('Finalizado', 'Cancelado')
                 ORDER BY v.fecha_salida ASC, v.hora_salida ASC
@@ -654,7 +632,7 @@ class RutaModel
                 COALESCE(tb.capacidad, 0) as capacidad,
                 COALESCE(term_origen.nombre_sede, 'Sin Asignar') as terminal_origen,
                 COALESCE(term_destino.nombre_sede, 'Sin Asignar') as terminal_destino,
-                COALESCE(CONCAT(u1.nombres, ' ', u1.apellidos), CONCAT(p_chofer.nombres, ' ', p_chofer.apellidos), 'PENDIENTE DE ASIGNACIÓN') as chofer_nombre,
+                COALESCE(CONCAT(p_viaje.nombres, ' ', p_viaje.apellidos), CONCAT(p_chofer.nombres, ' ', p_chofer.apellidos), 'PENDIENTE DE ASIGNACIÓN') as chofer_nombre,
                 COALESCE(CONCAT(p_copiloto.nombres, ' ', p_copiloto.apellidos), 'PENDIENTE DE ASIGNACIÓN') as copiloto_nombre,
                 COALESCE(b.placa, 'PENDIENTE DE ASIGNACIÓN') as bus_placa,
                 COALESCE(b.id, 'S/N') as bus_numero
@@ -664,7 +642,7 @@ class RutaModel
             LEFT JOIN terminales term_origen ON v.terminal_origen_id = term_origen.id
             LEFT JOIN terminales term_destino ON v.terminal_destino_id = term_destino.id
             LEFT JOIN vehiculos b ON v.bus_id = b.id
-            LEFT JOIN usuarios u1 ON v.chofer_id = u1.id
+            LEFT JOIN personal p_viaje ON v.chofer_id = p_viaje.id
             LEFT JOIN asignaciones_buses ab ON b.id = ab.bus_id AND ab.estado = 1
             LEFT JOIN personal p_copiloto ON ab.copiloto_id = p_copiloto.id
             LEFT JOIN personal p_chofer ON ab.chofer_id = p_chofer.id
@@ -757,17 +735,31 @@ class RutaModel
             $this->db->bind(':uid', $datos['usuario_id']);
             $cajaAbierta = $this->db->single();
 
-            // Si es una VENTA (no reserva), requerir caja abierta
-            if ($datos['estado'] == 'vendido') {
+            // Venta, o cobro QR (se confirmara en esta caja): requiere caja abierta
+            if ($datos['estado'] == 'vendido' || ($datos['metodo_pago'] ?? '') === 'QR') {
                 if (!$cajaAbierta) {
                     throw new Exception("No tienes una Caja Abierta. Debes abrir caja para realizar ventas.");
                 }
-                $sesionId = $cajaAbierta->id;
+                $sesionId = $datos['estado'] == 'vendido' ? $cajaAbierta->id : null;
             } else {
                 $sesionId = null; // Reservas no mueven dinero aún
             }
 
+            // 2a. El asiento debe existir en el bus del viaje (antes se podia vender
+            //     cualquier numero, incluso mayor que la capacidad).
+            $this->db->query("SELECT COALESCE(tb.capacidad, 0) AS capacidad FROM viajes v LEFT JOIN tipos_buses tb ON tb.id = v.tipo_bus_id WHERE v.id = :vid");
+            $this->db->bind(':vid', $datos['viaje_id']);
+            $capacidad = (int) ($this->db->single()->capacidad ?? 0);
+            $asiento = (int) $datos['asiento'];
+            if ($capacidad <= 0) {
+                throw new Exception("El viaje #{$datos['viaje_id']} no tiene un bus con asientos definidos.");
+            }
+            if ($asiento < 1 || $asiento > $capacidad) {
+                throw new Exception("El asiento {$datos['asiento']} no existe en este bus (asientos 1 a {$capacidad}).");
+            }
+
             // 2. Verificar Asiento Disponible (Bloqueo para concurrencia)
+            $this->liberarCobrosQrVencidos($datos['viaje_id']);
             $this->db->query("SELECT id FROM boletos WHERE viaje_id = :vid AND numero_asiento = :asiento AND estado IN ('vendido','reservado') FOR UPDATE");
             $this->db->bind(':vid', $datos['viaje_id']);
             $this->db->bind(':asiento', $datos['asiento']);
@@ -781,8 +773,12 @@ class RutaModel
             // 4. Insertar Boleto
             $paradaId = !empty($datos['parada_id']) ? $datos['parada_id'] : null;
 
-            $sql = "INSERT INTO boletos (viaje_id, cliente_id, usuario_vendedor_id, sesion_caja_id, numero_asiento, precio_final, estado, fecha_reserva, codigo_boleto, parada_id) 
-                    VALUES (:vid, :cid, :uid, :sesion, :asiento, :precio, :estado, NOW(), :codigo, :parada_id)";
+            $metodoPago = ($datos['metodo_pago'] ?? 'EFECTIVO') === 'QR' ? 'QR' : 'EFECTIVO';
+            // Cobro QR pendiente: el asiento queda reservado solo unos minutos
+            $minutosQr = !empty($datos['minutos_reserva']) ? max(1, (int) $datos['minutos_reserva']) : null;
+
+            $sql = "INSERT INTO boletos (viaje_id, cliente_id, usuario_vendedor_id, sesion_caja_id, numero_asiento, precio_final, metodo_pago, fecha_pago, estado, fecha_reserva, fecha_expiracion_reserva, codigo_boleto, parada_id)
+                    VALUES (:vid, :cid, :uid, :sesion, :asiento, :precio, :metodo, " . ($datos['estado'] == 'vendido' ? 'NOW()' : 'NULL') . ", :estado, NOW(), " . ($minutosQr ? 'DATE_ADD(NOW(), INTERVAL ' . $minutosQr . ' MINUTE)' : 'NULL') . ", :codigo, :parada_id)";
 
             $this->db->query($sql);
             $this->db->bind(':vid', $datos['viaje_id']);
@@ -791,6 +787,7 @@ class RutaModel
             $this->db->bind(':sesion', $sesionId);
             $this->db->bind(':asiento', $datos['asiento']);
             $this->db->bind(':precio', $datos['precio']);
+            $this->db->bind(':metodo', $metodoPago);
             $this->db->bind(':estado', $datos['estado']);
             $this->db->bind(':codigo', $codigo);
             $this->db->bind(':parada_id', $paradaId);
@@ -801,8 +798,8 @@ class RutaModel
             // 5. REGISTRAR MOVIMIENTO DE CAJA (Solo si es venta)
             if ($datos['estado'] == 'vendido' && $sesionId) {
                 // Insertar movimiento
-                $sqlCaja = "INSERT INTO movimientos_caja (sesion_id, tipo_movimiento, origen_modulo, referencia_id, monto, descripcion) 
-                            VALUES (:sesion, 'INGRESO', 'PASAJE', :ref, :monto, :desc)";
+                $sqlCaja = "INSERT INTO movimientos_caja (sesion_id, tipo_movimiento, origen_modulo, referencia_id, monto, metodo_pago, descripcion)
+                            VALUES (:sesion, 'INGRESO', 'PASAJE', :ref, :monto, :metodo, :desc)";
 
                 $descripcion = "Venta Boleto #" . $codigo . " Asiento: " . $datos['asiento'];
 
@@ -810,6 +807,7 @@ class RutaModel
                 $this->db->bind(':sesion', $sesionId);
                 $this->db->bind(':ref', $boletoId);
                 $this->db->bind(':monto', $datos['precio']);
+                $this->db->bind(':metodo', $metodoPago);
                 $this->db->bind(':desc', $descripcion);
                 $this->db->execute();
             }
@@ -890,15 +888,18 @@ class RutaModel
                 
                 -- Datos del Bus
                 bus.placa as bus_placa,
-                bus.numero_interno as bus_numero
-                
+                bus.id as bus_numero,
+                b.metodo_pago,
+                b.referencia_pago,
+                b.estado
+                                
             FROM boletos b
             INNER JOIN clientes c ON b.cliente_id = c.id
             INNER JOIN viajes v ON b.viaje_id = v.id
             INNER JOIN rutas r ON v.ruta_id = r.id
             LEFT JOIN rutas_paradas rp ON b.parada_id = rp.id
             LEFT JOIN terminales ter_orig ON v.terminal_origen_id = ter_orig.id
-            LEFT JOIN buses bus ON v.bus_id = bus.id
+            LEFT JOIN vehiculos bus ON v.bus_id = bus.id
             WHERE b.id = :id";
 
             $this->db->query($sql);
@@ -1053,6 +1054,103 @@ class RutaModel
         return false;
     }
 
+    /**
+     * Confirma el pago de un boleto reservado (efectivo o QR) y lo registra en la
+     * caja abierta del usuario. Antes, confirmar una reserva solo cambiaba el
+     * estado a vendido y el ingreso nunca llegaba a caja.
+     * @return object datos del ticket para imprimir
+     */
+    public function confirmarPagoBoleto($boletoId, $usuarioId, $metodo = 'EFECTIVO', $referencia = null)
+    {
+        $metodo = $metodo === 'QR' ? 'QR' : 'EFECTIVO';
+
+        $this->db->beginTransaction();
+        try {
+            $this->db->query("SELECT id, estado, precio_final, codigo_boleto, numero_asiento, viaje_id FROM boletos WHERE id = :id FOR UPDATE");
+            $this->db->bind(':id', $boletoId);
+            $boleto = $this->db->single();
+
+            if (!$boleto) {
+                throw new Exception('El boleto no existe.');
+            }
+            if ($boleto->estado === 'vendido') {
+                throw new Exception('Este boleto ya fue cobrado.');
+            }
+            if ($boleto->estado !== 'reservado') {
+                throw new Exception('La reserva fue cancelada o venció. Vuelva a seleccionar el asiento.');
+            }
+
+            $this->db->query("SELECT id FROM cajas_sesiones WHERE usuario_id = :uid AND estado = 'ABIERTA'");
+            $this->db->bind(':uid', $usuarioId);
+            $caja = $this->db->single();
+            if (!$caja) {
+                throw new Exception('No tiene una caja abierta. Abra caja para confirmar cobros.');
+            }
+
+            $this->db->query("UPDATE boletos SET estado = 'vendido', sesion_caja_id = :caja, metodo_pago = :metodo,
+                                     referencia_pago = :ref, fecha_pago = NOW(), fecha_expiracion_reserva = NULL
+                              WHERE id = :id");
+            $this->db->bind(':caja', $caja->id);
+            $this->db->bind(':metodo', $metodo);
+            $this->db->bind(':ref', $referencia !== null && $referencia !== '' ? mb_substr(trim($referencia), 0, 60) : null);
+            $this->db->bind(':id', $boletoId);
+            $this->db->execute();
+
+            $this->db->query("INSERT INTO movimientos_caja (sesion_id, tipo_movimiento, origen_modulo, referencia_id, monto, metodo_pago, descripcion)
+                              VALUES (:sesion, 'INGRESO', 'PASAJE', :ref, :monto, :metodo, :desc)");
+            $this->db->bind(':sesion', $caja->id);
+            $this->db->bind(':ref', $boletoId);
+            $this->db->bind(':monto', $boleto->precio_final);
+            $this->db->bind(':metodo', $metodo);
+            $this->db->bind(':desc', "Venta Boleto #{$boleto->codigo_boleto} Asiento: {$boleto->numero_asiento}" . ($metodo === 'QR' ? ' (QR' . ($referencia ? " op. {$referencia}" : '') . ')' : ''));
+            $this->db->execute();
+
+            $this->db->commit();
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return $this->obtenerDatosTicket($boletoId);
+    }
+
+    /** Cancela un cobro QR pendiente y libera el asiento (queda registrado como cancelado). */
+    public function cancelarCobroQr($boletoId)
+    {
+        $this->db->query("UPDATE boletos SET estado = 'cancelado' WHERE id = :id AND estado = 'reservado' AND metodo_pago = 'QR'");
+        $this->db->bind(':id', $boletoId);
+        $this->db->execute();
+        return $this->db->rowCount() > 0;
+    }
+
+    /** Libera asientos de cobros QR que no se confirmaron a tiempo. */
+    public function liberarCobrosQrVencidos($viajeId = null)
+    {
+        $this->db->query("UPDATE boletos SET estado = 'cancelado'
+                          WHERE estado = 'reservado' AND metodo_pago = 'QR'
+                            AND fecha_expiracion_reserva IS NOT NULL AND fecha_expiracion_reserva < NOW()"
+            . ($viajeId ? ' AND viaje_id = :vid' : ''));
+        if ($viajeId) {
+            $this->db->bind(':vid', $viajeId);
+        }
+        return $this->db->execute();
+    }
+
+    /** Estado de un boleto para la pantalla del pasajero (sin datos personales). */
+    public function estadoCobroBoleto($boletoId)
+    {
+        $this->db->query("SELECT b.id, b.estado, b.metodo_pago, b.precio_final, b.numero_asiento, b.codigo_boleto,
+                                 GREATEST(TIMESTAMPDIFF(SECOND, NOW(), b.fecha_expiracion_reserva), 0) AS segundos_restantes,
+                                 r.origen, COALESCE(rp.nombre_parada, r.destino) AS destino, v.fecha_salida
+                          FROM boletos b
+                          JOIN viajes v ON v.id = b.viaje_id
+                          JOIN rutas r ON r.id = v.ruta_id
+                          LEFT JOIN rutas_paradas rp ON rp.id = b.parada_id
+                          WHERE b.id = :id");
+        $this->db->bind(':id', $boletoId);
+        return $this->db->single() ?: null;
+    }
+
     public function cambiarEstadoBoleto($id, $estado)
     {
         $this->db->query("UPDATE boletos SET estado = :e WHERE id = :id");
@@ -1105,17 +1203,14 @@ class RutaModel
         ];
     }
 
-    /**
-     * Listar todos los choferes activos
-     */
+    /** Choferes activos (personal con perfil Chofer) para programar viajes. */
     public function listarChoferes()
     {
         try {
-            // Asumimos tabla usuarios. Ajustar WHERE si hay columna de rol específica.
-            // Ejemplo: WHERE rol = 'chofer' AND estado = 1
-            $this->db->query("SELECT id, nombres, apellidos FROM usuarios WHERE estado = 1");
+            $this->db->query("SELECT id, nombres, apellidos FROM personal WHERE perfil = 'Chofer' AND estado = 1 ORDER BY apellidos, nombres");
             return $this->db->resultSet();
         } catch (Exception $e) {
+            error_log('RutaModel::listarChoferes: ' . $e->getMessage());
             return [];
         }
     }

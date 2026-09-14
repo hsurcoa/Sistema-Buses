@@ -193,6 +193,12 @@
                 <span class="label">+ Ingresos:</span>
                 <span class="value">Bs. <?php echo number_format($data['sesion']->total_ingresos, 2); ?></span>
             </div>
+            <?php if ((float) ($data['sesion']->total_qr ?? 0) > 0): ?>
+                <div class="row">
+                    <span class="label">&nbsp;&nbsp;de ellos por QR:</span>
+                    <span class="value">Bs. <?php echo number_format((float) $data['sesion']->total_qr, 2); ?></span>
+                </div>
+            <?php endif; ?>
             <div class="row egreso">
                 <span class="label">- Egresos:</span>
                 <span class="value">Bs. <?php echo number_format($data['sesion']->total_egresos, 2); ?></span>

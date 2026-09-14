@@ -1,0 +1,16 @@
+CRITICAL ERROR ControladorTransacciones: El asiento 999 no existe en este bus (asientos 1 a 59).
+#0 C:\xampp\htdocs\venta-pasajes\legacy\app\controllers\ControladorTransacciones.php(138): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\legacy\app\controllers\ControladorTransacciones.php(63): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\legacy\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\legacy\public\index.php(35): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 999 no existe en este bus (asientos 1 a 59).
+#0 C:\xampp\htdocs\venta-pasajes\legacy\app\controllers\ControladorTransacciones.php(138): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\legacy\app\controllers\ControladorTransacciones.php(63): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\legacy\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\legacy\public\index.php(35): App->__construct()
+#4 {main}CRITICAL ERROR ControladorTransacciones: El asiento 55 ya está ocupado en el viaje #17. Seleccione otro.
+#0 C:\xampp\htdocs\venta-pasajes\legacy\app\controllers\ControladorTransacciones.php(138): RutaModel->registrarVentaTransaccion(Array)
+#1 C:\xampp\htdocs\venta-pasajes\legacy\app\controllers\ControladorTransacciones.php(63): ControladorTransacciones->procesarNuevaTransaccion(Array)
+#2 C:\xampp\htdocs\venta-pasajes\legacy\app\core\App.php(45): ControladorTransacciones->index()
+#3 C:\xampp\htdocs\venta-pasajes\legacy\public\index.php(35): App->__construct()
+#4 {main}

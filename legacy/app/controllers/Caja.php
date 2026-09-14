@@ -16,9 +16,6 @@ class Caja extends Controller
 
     public function index()
     {
-        ini_set('display_errors', 1);
-        ini_set('display_startup_errors', 1);
-        error_reporting(E_ALL);
 
         // Verificar si hay caja abierta
         $userId = $this->sessionManager->getUserId();
@@ -139,7 +136,8 @@ class Caja extends Controller
 
             // 3. Validar Saldo Disponible (Opcional pero recomendado)
             $resumen = $this->cajaModel->obtenerResumenSesion($cajaAbierta->id);
-            $saldoActual = ($resumen->monto_inicial + $resumen->total_ingresos) - $resumen->total_egresos;
+            // Solo hay en el cajon el efectivo (los cobros QR no se pueden gastar desde caja)
+            $saldoActual = ($resumen->monto_inicial + $resumen->total_efectivo) - $resumen->total_egresos;
 
             if ($monto > $saldoActual) {
                 echo json_encode(['status' => 'error', 'message' => 'Fondos insuficientes en caja para este gasto.']);
@@ -156,7 +154,7 @@ class Caja extends Controller
 
             try {
                 // 5. Registrar Egreso
-                if ($this->cajaModel->registrarMovimiento($cajaAbierta->id, 'EGRESO', 'GASTO_OPERATIVO', null, $monto, $descripcion)) {
+                if ($this->cajaModel->registrarMovimiento($cajaAbierta->id, 'EGRESO', 'GASTO', null, $monto, $descripcion)) {
                     echo json_encode(['status' => 'success', 'message' => 'Gasto registrado correctamente.']);
                 } else {
                     echo json_encode(['status' => 'error', 'message' => 'No se pudo registrar el gasto.']);

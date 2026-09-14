@@ -11,6 +11,13 @@ if (file_exists('../app/bootstrap.php')) {
 }
 
 // 2. Initial Checks
+// El ticket tiene nombre y documento del pasajero: solo para usuarios con sesion
+// (antes cualquiera podia recorrer ids y ver los datos).
+if (!$sessionManager->isAuthenticated()) {
+    http_response_code(401);
+    die("Sesión expirada. Inicie sesión nuevamente.");
+}
+
 if (!isset($_GET['id']) || empty($_GET['id'])) {
     die("Error: Ticket ID Required.");
 }
@@ -39,7 +46,7 @@ $sql = "SELECT
             
             -- Ruta
             r.origen,
-            r.destino,
+            COALESCE(rp.nombre_parada, r.destino) AS destino, -- destino real del pasajero (parada intermedia)
             
             -- Bus (Corregido: v.bus_id apunta a vehiculos, no buses)
             veh.placa as bus_placa,
@@ -53,14 +60,15 @@ $sql = "SELECT
         INNER JOIN clientes c ON b.cliente_id = c.id
         INNER JOIN viajes v ON b.viaje_id = v.id
         INNER JOIN rutas r ON v.ruta_id = r.id
+        LEFT JOIN rutas_paradas rp ON rp.id = b.parada_id
         
         -- Fix: Unir con vehiculos usando el bus_id del viaje
         LEFT JOIN vehiculos veh ON v.bus_id = veh.id
         -- Fix: Intentar obtener el numero interno de la tabla buses usando la placa (con correccion de collation)
         LEFT JOIN buses bs ON veh.placa COLLATE utf8mb4_unicode_ci = bs.placa
         
-        -- Fix: Obtener datos del chofer
-        LEFT JOIN usuarios u ON v.chofer_id = u.id
+        -- Chofer del viaje (viajes.chofer_id -> personal)
+        LEFT JOIN personal u ON v.chofer_id = u.id
         
         WHERE b.id = :id OR b.codigo_boleto = :codigo
         LIMIT 1";

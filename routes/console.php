@@ -51,3 +51,32 @@ Artisan::command('rbac:sync {--verify : Compara usuario x permiso contra rol_per
 
     return 0;
 })->purpose('Sincroniza roles/permisos legacy hacia spatie y verifica paridad');
+
+// Reemplaza public/check_db.php (script suelto sin auth, borrado en el
+// cierre de la migracion a Laravel: exponia conteos de tablas por URL).
+Artisan::command('db:reporte', function () {
+    $tablas = [
+        'Terminales' => 'terminales',
+        'Tipos de Buses' => 'tipos_buses',
+        'Vehiculos (Buses)' => 'vehiculos',
+        'Personal (Choferes)' => 'personal',
+        'Rutas' => 'rutas',
+        'Clientes (Pasajeros)' => 'clientes',
+        'Viajes (Rutas Programadas)' => 'viajes',
+    ];
+
+    $filas = [];
+    foreach ($tablas as $etiqueta => $tabla) {
+        $filas[] = [$etiqueta, DB::table($tabla)->count()];
+    }
+
+    $this->table(['Tabla', 'Registros'], $filas);
+})->purpose('Muestra conteos de las tablas principales de la base de datos');
+
+// Reemplaza public/run_seed.php (script suelto sin auth, borrado en el
+// cierre de la migracion a Laravel: permitia re-sembrar la BD sin login
+// solo con conocer la URL).
+Artisan::command('db:seed-pando', function () {
+    $this->call('db:seed', ['--class' => \Database\Seeders\PandoSeeder::class, '--force' => true]);
+    $this->info('Datos de Pando insertados: terminales, rutas, buses de dos pisos, minibuses, choferes bolivianos y clientes.');
+})->purpose('Siembra los datos de ejemplo de Pando (equivalente a PandoSeeder)');

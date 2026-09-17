@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- SweetAlert2 (mensajes de error del login) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
     <style>
         :root {
@@ -134,17 +136,6 @@
             <p class="text-white-50">Sistema de Gestión de Pasajes</p>
         </div>
 
-        @if (session('mensaje_error'))
-            <div class="alert alert-danger px-3 py-2 rounded-pill text-center fs-7" role="alert">
-                <i class="fas fa-exclamation-circle me-1"></i> {{ session('mensaje_error') }}
-            </div>
-        @endif
-        @error('email')
-            <div class="alert alert-danger px-3 py-2 rounded-pill text-center fs-7" role="alert">
-                <i class="fas fa-exclamation-circle me-1"></i> {{ $message }}
-            </div>
-        @enderror
-
         <form method="POST" action="{{ route('login') }}">
             @csrf
             <div class="mb-3">
@@ -167,6 +158,18 @@
         </form>
     </div>
 
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    @if (session('mensaje_error') || $errors->has('email'))
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'No se pudo iniciar sesión',
+                text: @json(session('mensaje_error') ?? $errors->first('email')),
+                confirmButtonText: 'Entendido',
+            });
+        </script>
+    @endif
 </body>
 
 </html>

@@ -64,6 +64,12 @@ class Usuario extends Authenticatable
         return $this->belongsTo(Rol::class, 'rol_id');
     }
 
+    /** Sucursal asignada (columna agregada por la migracion multisucursal). */
+    public function sucursal()
+    {
+        return $this->belongsTo(Terminal::class, 'sucursal_id');
+    }
+
     public function nombreCompleto(): string
     {
         return trim($this->nombres.' '.$this->apellidos);

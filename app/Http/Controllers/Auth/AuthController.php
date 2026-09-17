@@ -13,27 +13,17 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 /**
- * Login/logout migrados a Laravel (Fase 1, Tarea 8).
- *
- * Puente de sesion (Tarea 6): el motor de sesiones de Laravel es
- * independiente de la sesion nativa de PHP que usa el legacy
- * (SessionManager -> session_start()/$_SESSION). Para que ambos lados vean
- * al mismo usuario logueado, este controller NO usa el guard de sesion de
- * Laravel como fuente de verdad: abre la MISMA sesion nativa que abre el
- * legacy (misma clase SessionManager, mismo nombre de cookie) y escribe en
- * ella exactamente lo mismo que escribia legacy/login.php
- * (user_id/usuario/email/rol). Adicionalmente llama Auth::login() para que
- * rutas Laravel-nativas futuras puedan usar el guard estandar si lo
- * necesitan; eso vive en su propia cookie/sesion independiente y no
- * reemplaza al puente.
+ * Login/logout, 100% Laravel nativo (Fase 1, Tarea 8; puente de sesion
+ * nativa eliminado al cerrar la migracion — ver informe de fin de sesion).
+ * El guard de Laravel (`Auth::login()`/`auth()->user()`) es la unica fuente
+ * de verdad de la sesion; ya no existe `SessionManager` ni una cookie nativa
+ * de PHP en paralelo.
  */
 class AuthController extends Controller
 {
     public function showLogin(): View|RedirectResponse
     {
-        $session = $this->legacySession();
-
-        if ($session->isAuthenticated()) {
+        if (Auth::check()) {
             return redirect('/dashboard');
         }
 
@@ -62,23 +52,11 @@ class AuthController extends Controller
                 ->with('mensaje_error', 'Su cuenta está desactivada. Consulte con el administrador.');
         }
 
-        $session = $this->legacySession();
-        $session->regenerateId();
-        $session->setUserData([
-            'user_id' => $usuario->id,
-            'usuario' => $usuario->nombreCompleto(),
-            'email' => $usuario->email,
-            'rol' => $usuario->rol?->nombre ?? 'usuario',
-        ]);
-
-        // Guard nativo de Laravel, para rutas ya migradas que quieran usar
-        // Auth::user()/auth middleware mas adelante (sesion propia, no
-        // interfiere con el puente de arriba).
+        $request->session()->regenerate();
         Auth::login($usuario);
 
-        // RBAC spatie al dia con lo que el admin haya cambiado en el modulo
-        // legacy (Tarea 9). Todavia ninguna ruta depende de spatie, asi que un
-        // fallo aqui se registra pero no impide entrar a vender.
+        // RBAC spatie al dia con lo que el admin haya cambiado en Admin >
+        // Roles y permisos (Tarea 9).
         try {
             $rbacSync->syncUser($usuario);
         } catch (\Throwable $e) {
@@ -89,18 +67,5 @@ class AuthController extends Controller
         }
 
         return redirect('/dashboard');
-    }
-
-    /**
-     * Abre (o reanuda) la misma sesion nativa de PHP que usa el legacy,
-     * reutilizando su propia clase para no duplicar la logica de cookie/
-     * lifetime/activity-timeout en dos sitios.
-     */
-    private function legacySession(): \SessionManager
-    {
-        require_once base_path('legacy/app/config/config.php');
-        require_once base_path('legacy/app/core/SessionManager.php');
-
-        return \SessionManager::getInstance();
     }
 }

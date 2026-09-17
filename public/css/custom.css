@@ -832,3 +832,110 @@ body.dark-mode .btn-light { background-color: #2a2a2a; border-color: var(--color
 body.dark-mode .rounded-circle.bg-light { background-color: #2a2a2a !important; }
 body.dark-mode .modal-content,
 body.dark-mode .dropdown-menu { background-color: var(--color-card-bg); color: var(--color-text); border-color: var(--color-border); }
+
+/* ===================================================================
+   Iconos de color + animación en el sidebar (Fase 2, pulido visual)
+   Solo aplica a lo ya migrado a Laravel: este archivo es
+   public/css/custom.css, independiente del que sigue usando el legacy
+   (legacy/public/css/custom.css), así que no afecta a ventas/caja/admin/
+   encomiendas/reportes/backup hasta que cada uno se migre.
+   =================================================================== */
+.sidebar-menu > .nav-item:nth-of-type(6n+1) > .nav-link .nav-icon,
+.sidebar-menu > .nav-item:nth-of-type(6n+1) > .nav-link.active .nav-icon { color: #818cf8; }
+.sidebar-menu > .nav-item:nth-of-type(6n+2) > .nav-link .nav-icon,
+.sidebar-menu > .nav-item:nth-of-type(6n+2) > .nav-link.active .nav-icon { color: #f472b6; }
+.sidebar-menu > .nav-item:nth-of-type(6n+3) > .nav-link .nav-icon,
+.sidebar-menu > .nav-item:nth-of-type(6n+3) > .nav-link.active .nav-icon { color: #34d399; }
+.sidebar-menu > .nav-item:nth-of-type(6n+4) > .nav-link .nav-icon,
+.sidebar-menu > .nav-item:nth-of-type(6n+4) > .nav-link.active .nav-icon { color: #fbbf24; }
+.sidebar-menu > .nav-item:nth-of-type(6n+5) > .nav-link .nav-icon,
+.sidebar-menu > .nav-item:nth-of-type(6n+5) > .nav-link.active .nav-icon { color: #38bdf8; }
+.sidebar-menu > .nav-item:nth-of-type(6n+6) > .nav-link .nav-icon,
+.sidebar-menu > .nav-item:nth-of-type(6n+6) > .nav-link.active .nav-icon { color: #fb923c; }
+
+.sidebar-menu .nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, transform 0.3s cubic-bezier(.34,1.56,.64,1);
+}
+.sidebar-menu .nav-link:hover .nav-icon,
+.sidebar-menu .nav-link.active .nav-icon {
+    transform: scale(1.18) rotate(-8deg);
+    filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+}
+/* El estado activo/hover sigue pintando el icono de blanco por contraste
+   sobre el fondo solido (ver reglas de mas arriba) — el color propio del
+   icono solo se ve en reposo, y el brillo/escala es lo que da la sensacion
+   de animacion "viva" sin perder legibilidad. */
+.sidebar-menu .nav-link:hover .nav-icon,
+.sidebar-menu .nav-link.active .nav-icon { color: #fff !important; }
+
+/* ---- Hamburguesa: mejor tap target y giro al abrir/cerrar en móvil ---- */
+#sidebarToggle .bi { transition: transform 0.25s ease; display: inline-block; }
+body.sidebar-open-mobile #sidebarToggle .bi { transform: rotate(90deg); }
+
+@media (max-width: 991.98px) {
+    .header-icon-btn#sidebarToggle { width: 44px; height: 44px; font-size: 1.2rem; }
+    body.sidebar-open-mobile { overflow: hidden; }
+    .sidebar-backdrop {
+        opacity: 0;
+        transition: opacity 0.25s ease;
+    }
+    body.sidebar-open-mobile .sidebar-backdrop { opacity: 1; }
+    .app-sidebar { box-shadow: 0 0 32px rgba(0, 0, 0, 0.35); }
+}
+
+/* ===================================================================
+   Tarjetas 3D con degradado (KPIs del dashboard) — efecto adaptado de
+   "Tarjetas-3D-Degradado" (inclinacion 3D + brillo que sigue el cursor).
+   Solo se usa en resources/views/dashboard/index.blade.php.
+   =================================================================== */
+.kpis-3d { perspective: 1400px; }
+
+.kpi-3d {
+    position: relative;
+    color: #fff;
+    border: 0;
+    border-radius: var(--radius-card);
+    transform-style: preserve-3d;
+    will-change: transform;
+    transition: transform 0.35s cubic-bezier(.2,.8,.2,1), box-shadow 0.35s ease;
+    overflow: hidden;
+}
+.kpi-3d::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(160px 160px at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.24), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+}
+.kpi-3d:hover { transform: translateY(-6px); }
+.kpi-3d:hover::before { opacity: 1; }
+
+.kpi-3d .kpi-label,
+.kpi-3d .kpi-valor,
+.kpi-3d .kpi-nota,
+.kpi-3d .leyenda { color: rgba(255, 255, 255, 0.92) !important; }
+.kpi-3d .kpi-valor { color: #fff !important; }
+.kpi-3d .barra-split { background: rgba(255, 255, 255, 0.25) !important; }
+.kpi-3d .barra-split span:first-child { background: #fff !important; }
+.kpi-3d .barra-split span:last-child { background: rgba(255, 255, 255, 0.55) !important; }
+.kpi-3d .leyenda i { background: #fff !important; }
+.kpi-3d .leyenda span:last-child i { background: rgba(255, 255, 255, 0.55) !important; }
+.kpi-3d .delta.sube { color: #d1fae5 !important; }
+.kpi-3d .delta.baja { color: #fecaca !important; }
+
+.kpi-3d--ingresos { background: linear-gradient(150deg, #2f6fed 0%, #7c3aed 100%); box-shadow: 0 10px 26px rgba(67, 56, 202, 0.35); }
+.kpi-3d--boletos  { background: linear-gradient(150deg, #c026d3 0%, #ec4899 100%); box-shadow: 0 10px 26px rgba(192, 38, 211, 0.3); }
+.kpi-3d--ocupacion{ background: linear-gradient(150deg, #f59e0b 0%, #f43f5e 100%); box-shadow: 0 10px 26px rgba(245, 158, 11, 0.3); }
+.kpi-3d--encomiendas { background: linear-gradient(150deg, #10b981 0%, #0891b2 100%); box-shadow: 0 10px 26px rgba(16, 185, 129, 0.3); }
+
+.kpi-3d .kpi-label i { color: rgba(255, 255, 255, 0.85); }
+
+@media (prefers-reduced-motion: reduce) {
+    .kpi-3d { transition: none; }
+    .sidebar-menu .nav-icon { transition: none; }
+}

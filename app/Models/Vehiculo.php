@@ -19,6 +19,7 @@ class Vehiculo extends Model
 
     protected $fillable = [
         'propietario_nombres', 'propietario_apellidos', 'tarjeta_circulacion', 'placa', 'tipo_bus_id',
+        'soat_numero', 'soat_vencimiento', 'itv_numero', 'itv_vencimiento',
         'clase', 'marca', 'anio', 'modelo', 'tipo_combustible', 'carroceria', 'ejes', 'color',
         'nro_motor', 'cilindros', 'nro_serie', 'ruedas', 'peso_seco', 'peso_bruto', 'longitud',
         'altura', 'ancho', 'pasajeros', 'asientos', 'tipo_servicio', 'estado', 'fecha_registro',
@@ -26,7 +27,12 @@ class Vehiculo extends Model
 
     protected function casts(): array
     {
-        return ['estado' => 'boolean', 'fecha_registro' => 'datetime'];
+        return [
+            'estado' => 'boolean',
+            'fecha_registro' => 'datetime',
+            'soat_vencimiento' => 'date:Y-m-d',
+            'itv_vencimiento' => 'date:Y-m-d',
+        ];
     }
 
     public function tipoBus()

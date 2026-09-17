@@ -17,7 +17,8 @@ class ReporteService
         return DB::table('vehiculos')->orderBy('placa')->select('id', 'placa')->get();
     }
 
-    public function buscarViajesConConteo(?string $fecha, $rutaId = null, $busId = null)
+    /** `$sucursalId`: viajes que salen desde esa terminal (null = todas, solo Administrador/Supervisor). */
+    public function buscarViajesConConteo(?string $fecha, $rutaId = null, $busId = null, ?int $sucursalId = null)
     {
         $q = DB::table('viajes as v')
             ->join('rutas as r', 'v.ruta_id', '=', 'r.id')
@@ -49,6 +50,9 @@ class ReporteService
         }
         if (! empty($busId)) {
             $q->where('v.bus_id', $busId);
+        }
+        if ($sucursalId) {
+            $q->where('v.terminal_origen_id', $sucursalId);
         }
 
         return $q->orderBy('v.fecha_salida')->orderBy('v.hora_salida')->get();
@@ -82,34 +86,41 @@ class ReporteService
             ->first();
     }
 
-    public function obtenerVentasHoy(): ?object
+    public function obtenerVentasHoy(?int $sucursalId = null): ?object
     {
-        return DB::table('boletos')->where('estado', 'vendido')->whereRaw('DATE(fecha_reserva) = CURDATE()')
-            ->selectRaw('SUM(precio_final) as total, COUNT(id) as cantidad')->first();
+        $q = DB::table('boletos')->where('estado', 'vendido')->whereRaw('DATE(fecha_reserva) = CURDATE()');
+        if ($sucursalId) {
+            $q->where('sucursal_id', $sucursalId);
+        }
+
+        return $q->selectRaw('SUM(precio_final) as total, COUNT(id) as cantidad')->first();
     }
 
-    public function obtenerVentasMes(): array
+    public function obtenerVentasMes(?int $sucursalId = null): array
     {
         $actual = DB::table('boletos')->where('estado', 'vendido')
             ->whereRaw('MONTH(fecha_reserva) = MONTH(CURRENT_DATE())')
             ->whereRaw('YEAR(fecha_reserva) = YEAR(CURRENT_DATE())')
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
             ->sum('precio_final');
 
         $anterior = DB::table('boletos')->where('estado', 'vendido')
             ->whereRaw('MONTH(fecha_reserva) = MONTH(CURRENT_DATE() - INTERVAL 1 MONTH)')
             ->whereRaw('YEAR(fecha_reserva) = YEAR(CURRENT_DATE() - INTERVAL 1 MONTH)')
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
             ->sum('precio_final');
 
         return ['actual' => $actual ?: 0, 'anterior' => $anterior ?: 0];
     }
 
-    public function obtenerMejorRutaMes(): ?object
+    public function obtenerMejorRutaMes(?int $sucursalId = null): ?object
     {
         return DB::table('boletos as b')
             ->join('viajes as v', 'b.viaje_id', '=', 'v.id')
             ->join('rutas as r', 'v.ruta_id', '=', 'r.id')
             ->where('b.estado', 'vendido')
             ->whereRaw('MONTH(b.fecha_reserva) = MONTH(CURRENT_DATE())')
+            ->when($sucursalId, fn ($q) => $q->where('b.sucursal_id', $sucursalId))
             ->groupBy('r.id')
             ->orderByDesc('total_ventas')
             ->select('r.origen', 'r.destino', DB::raw('SUM(b.precio_final) as total_ventas'), DB::raw('COUNT(b.id) as cantidad_pasajes'))
@@ -117,17 +128,18 @@ class ReporteService
             ->first();
     }
 
-    public function obtenerTendenciaSemanal()
+    public function obtenerTendenciaSemanal(?int $sucursalId = null)
     {
         return DB::table('boletos')->where('estado', 'vendido')
             ->whereRaw('fecha_reserva >= DATE(NOW()) - INTERVAL 7 DAY')
+            ->when($sucursalId, fn ($q) => $q->where('sucursal_id', $sucursalId))
             ->groupBy(DB::raw('DATE(fecha_reserva)'))
             ->orderBy('fecha')
             ->select(DB::raw('DATE(fecha_reserva) as fecha'), DB::raw('SUM(precio_final) as total'))
             ->get();
     }
 
-    public function obtenerDesgloseFinanciero(?string $fechaInicio = null, ?string $fechaFin = null)
+    public function obtenerDesgloseFinanciero(?string $fechaInicio = null, ?string $fechaFin = null, ?int $sucursalId = null)
     {
         $q = DB::table('boletos as b')
             ->join('viajes as v', 'b.viaje_id', '=', 'v.id')
@@ -145,11 +157,15 @@ class ReporteService
         } else {
             $q->whereRaw('b.fecha_reserva >= DATE(NOW()) - INTERVAL 30 DAY');
         }
+        if ($sucursalId) {
+            $q->where('b.sucursal_id', $sucursalId);
+        }
 
         return $q->get();
     }
 
-    public function buscarHistorico(string $fechaInicio, string $fechaFin, $rutaId = null)
+    /** `$sucursalId`: viajes que salen desde esa terminal (null = todas, solo Administrador/Supervisor). */
+    public function buscarHistorico(string $fechaInicio, string $fechaFin, $rutaId = null, ?int $sucursalId = null)
     {
         $q = DB::table('viajes as v')
             ->join('rutas as r', 'v.ruta_id', '=', 'r.id')
@@ -167,11 +183,15 @@ class ReporteService
         if (! empty($rutaId)) {
             $q->where('v.ruta_id', $rutaId);
         }
+        if ($sucursalId) {
+            $q->where('v.terminal_origen_id', $sucursalId);
+        }
 
         return $q->orderByDesc('v.fecha_salida')->orderBy('v.hora_salida')->get();
     }
 
-    public function buscarPasajero(string $criterio)
+    /** `$sucursalId`: solo boletos vendidos desde esa sucursal (null = todas, solo Administrador/Supervisor). */
+    public function buscarPasajero(string $criterio, ?int $sucursalId = null)
     {
         return DB::table('clientes as c')
             ->join('boletos as b', 'c.id', '=', 'b.cliente_id')
@@ -183,9 +203,42 @@ class ReporteService
                     ->orWhere('c.apellidos', 'like', $like)
                     ->orWhere('c.nombres', 'like', $like);
             })
+            ->when($sucursalId, fn ($q) => $q->where('b.sucursal_id', $sucursalId))
             ->select('c.id', 'c.nombres', 'c.apellidos', 'c.numero_documento', 'v.fecha_salida', 'v.hora_salida',
                 DB::raw("CONCAT(r.origen, ' - ', r.destino) as ruta"), 'b.numero_asiento', 'b.precio_final', 'b.estado', DB::raw('v.id as viaje_id'))
             ->orderByDesc('v.fecha_salida')
             ->get();
+    }
+
+    /** Bitácora de cancelaciones de boletos ya pagados: quién canceló, por qué, y si hubo devolución. */
+    public function obtenerCancelaciones(?string $fechaInicio, ?string $fechaFin, ?int $sucursalId = null, bool $soloPendientes = false)
+    {
+        $q = DB::table('cancelaciones_boletos as cb')
+            ->join('boletos as b', 'cb.boleto_id', '=', 'b.id')
+            ->join('clientes as c', 'b.cliente_id', '=', 'c.id')
+            ->join('usuarios as u', 'cb.usuario_id', '=', 'u.id')
+            ->leftJoin('usuarios as ud', 'cb.usuario_devolucion_id', '=', 'ud.id')
+            ->leftJoin('viajes as v', 'b.viaje_id', '=', 'v.id')
+            ->leftJoin('rutas as r', 'v.ruta_id', '=', 'r.id')
+            ->select([
+                'cb.id', 'cb.boleto_id', 'cb.monto', 'cb.devuelto', 'cb.metodo_devolucion', 'cb.motivo', 'cb.fecha_creacion', 'cb.fecha_devolucion',
+                'b.codigo_boleto', 'b.numero_asiento', 'b.metodo_pago',
+                DB::raw("CONCAT(c.nombres, ' ', c.apellidos) as pasajero"),
+                DB::raw("CONCAT(u.nombres, ' ', u.apellidos) as cancelado_por"),
+                DB::raw("CONCAT(ud.nombres, ' ', ud.apellidos) as devuelto_por"),
+                DB::raw("COALESCE(CONCAT(r.origen, ' - ', r.destino), 'N/D') as ruta"),
+            ]);
+
+        if ($fechaInicio && $fechaFin) {
+            $q->whereRaw('DATE(cb.fecha_creacion) BETWEEN ? AND ?', [$fechaInicio, $fechaFin]);
+        }
+        if ($sucursalId) {
+            $q->where('b.sucursal_id', $sucursalId);
+        }
+        if ($soloPendientes) {
+            $q->where('cb.devuelto', false);
+        }
+
+        return $q->orderByDesc('cb.fecha_creacion')->get();
     }
 }

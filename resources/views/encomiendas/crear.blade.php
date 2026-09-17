@@ -16,6 +16,7 @@
     <div class="app-content">
         <div class="container-fluid">
             <form action="<?php echo URLROOT; ?>/encomiendas/guardar" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
 
                 <div class="row">
                     <!-- Columna Izquierda: Datos del Envío -->

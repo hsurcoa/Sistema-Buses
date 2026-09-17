@@ -113,7 +113,7 @@
 </style>
 
 <!-- Content Wrapper -->
-<div class="content-wrapper" style="background: #f4f6f9;">
+<div class="content-wrapper">
     <!-- Header -->
     <section class="content-header">
         <div class="container-fluid">
@@ -123,8 +123,18 @@
                         <i class="fas fa-users-cog text-primary me-2"></i> Gestión de Pasajeros
                     </h1>
                 </div>
-                <div class="col-sm-6">
-                    <ol class="breadcrumb float-sm-end bg-transparent p-0">
+                <div class="col-sm-6 d-flex justify-content-sm-end align-items-center gap-2">
+                    <?php if (!empty($data['es_global'])): ?>
+                        <form method="get" class="d-flex">
+                            <select class="form-select form-select-sm w-auto" name="sucursal" onchange="this.form.submit()">
+                                <option value="">Todas las sucursales</option>
+                                <?php foreach ($data['sucursales'] as $s): ?>
+                                    <option value="<?php echo (int) $s->id; ?>" <?php echo (int) $data['sucursal_id'] === (int) $s->id ? 'selected' : ''; ?>><?php echo htmlspecialchars($s->nombre_sede); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
+                    <?php endif; ?>
+                    <ol class="breadcrumb bg-transparent p-0 mb-0">
                         <li class="breadcrumb-item"><a href="#">Inicio</a></li>
                         <li class="breadcrumb-item active">Pasajeros</li>
                     </ol>
@@ -136,6 +146,9 @@
     <!-- Main content -->
     <section class="content">
         <div class="container-fluid">
+            <?php if (!empty($data['sin_sucursal'])): ?>
+                <div class="alert alert-warning">Su usuario no tiene sucursal asignada: no se pueden mostrar datos. Pida al administrador que se la asigne.</div>
+            <?php endif; ?>
 
             <!-- MAIN CARD TABS -->
             <!-- MAIN CARD TABS -->
@@ -165,6 +178,7 @@
                         <!-- TAB 1: MANIFIESTO -->
                         <div class="tab-pane fade show active" id="content-manifiesto" role="tabpanel">
                             <form id="formFiltros">
+                                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
                                 <div class="row align-items-end p-3 bg-light rounded mb-4 border">
                                     <div class="col-md-4">
                                         <div class="form-group mb-0">
@@ -217,6 +231,7 @@
                             </div>
 
                             <form id="formHistorico">
+                                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
                                 <div class="row align-items-end p-3 bg-light rounded mb-4 border">
                                     <div class="col-md-3">
                                         <label class="text-muted font-weight-bold small text-uppercase">Desde</label>
@@ -266,6 +281,7 @@
                         <!-- TAB 3: PERSONA -->
                         <div class="tab-pane fade" id="content-persona" role="tabpanel">
                             <form id="formPersona">
+                                <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
                                 <div class="input-group input-group-lg shadow-sm rounded overflow-hidden">
                                     <span class="input-group-text bg-white border-0 ps-4"><i class="fas fa-search text-muted"></i></span>
                                     <input type="search" class="form-control border-0 ps-2" placeholder="Ingrese CI o Apellidos del pasajero" name="criterio" required>
@@ -354,6 +370,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
 <script>
+    // Conserva el filtro de sucursal (si hay uno en la URL) en las busquedas AJAX.
+    function conSucursal(url) {
+        const suc = new URLSearchParams(window.location.search).get('sucursal');
+        return suc ? url + '?sucursal=' + encodeURIComponent(suc) : url;
+    }
+
     $(document).ready(function() {
 
         // --- 0. FIX TABS (Explicit JS) ---
@@ -376,7 +398,7 @@
 
             let formData = new FormData(this);
             $.ajax({
-                url: '<?php echo URLROOT; ?>/reportes/buscar_viajes_ajax',
+                url: conSucursal('<?php echo URLROOT; ?>/reportes/buscar_viajes_ajax'),
                 type: 'POST',
                 data: formData,
                 processData: false,
@@ -419,7 +441,7 @@
             });
 
             $.ajax({
-                url: '<?php echo URLROOT; ?>/reportes/buscar_historico_ajax',
+                url: conSucursal('<?php echo URLROOT; ?>/reportes/buscar_historico_ajax'),
                 type: 'POST',
                 data: formData,
                 processData: false,
@@ -458,7 +480,7 @@
             });
 
             $.ajax({
-                url: '<?php echo URLROOT; ?>/reportes/buscar_persona_ajax',
+                url: conSucursal('<?php echo URLROOT; ?>/reportes/buscar_persona_ajax'),
                 type: 'POST',
                 data: formData,
                 processData: false,

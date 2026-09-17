@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LibelulaCobro;
 use App\Services\CajaService;
 use App\Services\ConfiguracionService;
+use App\Services\LibelulaService;
 use App\Services\RutaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,6 +22,7 @@ class ControladorTransaccionesController extends Controller
         private RutaService $rutas,
         private CajaService $caja,
         private ConfiguracionService $config,
+        private LibelulaService $libelula,
     ) {}
 
     public function index(Request $request)
@@ -45,15 +48,18 @@ class ControladorTransaccionesController extends Controller
         $estado = $datos['tipo'] === 'venta' ? 'vendido' : 'reservado';
         $esQr = $datos['tipo'] === 'qr';
         $minutosQr = null;
+        $qr = null;
 
         if ($esQr) {
             $caja = $this->caja->verificarCajaAbierta($request->user()->id);
             $sucursal = $caja->sucursal_id ?? $request->user()->sucursal_id;
             $qr = $this->config->obtenerPagoQr($sucursal);
-            if (! $qr) {
-                return response()->json(['status' => 'error', 'msg' => 'El cobro con QR no está configurado. Un administrador debe cargar el QR en Configuración.']);
+            $libelulaActiva = $this->libelula->estaActivo();
+
+            if (! $qr && ! $libelulaActiva) {
+                return response()->json(['status' => 'error', 'msg' => 'El cobro con QR no está configurado. Un administrador debe cargar el QR o activar Libélula en Configuración.']);
             }
-            $minutosQr = $qr['minutos'];
+            $minutosQr = $qr['minutos'] ?? 15;
         }
 
         $ventaData = [
@@ -78,16 +84,75 @@ class ControladorTransaccionesController extends Controller
 
         try {
             $ticket = $this->rutas->registrarVentaTransaccion($ventaData);
+            $cobroLibelula = null;
+
+            if ($ticket && $esQr && $this->libelula->estaActivo()) {
+                $resultadoLibelula = $this->registrarDeudaLibelula($ticket, $ventaData);
+                if (is_string($resultadoLibelula)) {
+                    // No dejamos un asiento "reservado" sin ninguna forma de pagarlo.
+                    $this->rutas->cancelarCobroQr($ticket->id_boleto);
+
+                    return response()->json(['status' => 'error', 'msg' => $resultadoLibelula], 200, [], JSON_UNESCAPED_UNICODE);
+                }
+                $cobroLibelula = $resultadoLibelula;
+            }
 
             $response = $ticket
                 ? ['status' => 'success', 'id_boleto' => $ticket->id_boleto, 'ticket' => $ticket, 'tipo' => $datos['tipo']]
                 : ['status' => 'error', 'msg' => 'No se pudo completar la operación (Asiento ocupado?)'];
+
+            // El frontend necesita esto para mostrar el QR real de Libélula en
+            // vez del QR estático fijo cargado en Configuración (ver modalCobroQr
+            // en ventas/venta_pasajes.blade.php).
+            if ($cobroLibelula) {
+                $response['libelula'] = [
+                    'qr_simple_url' => $cobroLibelula->qr_simple_url,
+                    'url_pasarela_pagos' => $cobroLibelula->url_pasarela_pagos,
+                ];
+            }
         } catch (\Throwable $e) {
             Log::error('ControladorTransaccionesController::procesarNuevaTransaccion: '.$e->getMessage());
             $response = ['status' => 'error', 'msg' => 'Error Interno: '.$e->getMessage()];
         }
 
         return response()->json($response, 200, [], JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    }
+
+    /** Registra la deuda del boleto recién reservado en Libélula. Devuelve el cobro creado, o un mensaje de error. */
+    private function registrarDeudaLibelula(object $ticket, array $ventaData): LibelulaCobro|string
+    {
+        // Unico por intento (no solo por boleto): si un intento anterior fallo
+        // y se reintenta, Libelula no deberia ver dos "deudas" con el mismo id.
+        $identificador = 'BOL'.$ticket->id_boleto.'-'.substr(bin2hex(random_bytes(3)), 0, 6);
+
+        $resultado = $this->libelula->registrarDeuda([
+            'identificador' => $identificador,
+            'email_cliente' => $ventaData['email'] ?? null,
+            'callback_url' => route('pagos.libelula.callback'),
+            'descripcion' => "Pasaje {$ticket->ciudad_origen} → {$ticket->ciudad_destino}, asiento {$ticket->numero_asiento}",
+            'nombre_cliente' => $ventaData['nombres'],
+            'apellido_cliente' => $ventaData['apellidos'],
+            'lineas_detalle_deuda' => [[
+                'concepto' => "Pasaje {$ticket->ciudad_origen} → {$ticket->ciudad_destino}",
+                'cantidad' => 1,
+                'costo_unitario' => (float) $ticket->precio,
+            ]],
+        ]);
+
+        if (! $resultado['ok']) {
+            return 'No se pudo generar el cobro con Libélula: '.$resultado['mensaje'];
+        }
+
+        return LibelulaCobro::create([
+            'boleto_id' => $ticket->id_boleto,
+            'identificador_deuda' => $identificador,
+            'id_transaccion' => $resultado['id_transaccion'],
+            'url_pasarela_pagos' => $resultado['url_pasarela_pagos'],
+            'qr_simple_url' => $resultado['qr_simple_url'],
+            'monto' => $ticket->precio,
+            'estado' => 'pendiente',
+            'respuesta_registro' => json_encode($resultado['crudo']),
+        ]);
     }
 
     private function procesarGestionReserva(array $datos, Request $request)
@@ -102,7 +167,7 @@ class ControladorTransaccionesController extends Controller
         try {
             $response = match ($subAccion) {
                 'confirmar_pago' => ['status' => 'success', 'tipo' => 'confirmacion', 'ticket' => $this->rutas->confirmarPagoBoleto($idBoleto, $request->user()->id, 'EFECTIVO')],
-                'eliminar' => $this->rutas->cancelarBoleto($idBoleto)
+                'eliminar' => $this->rutas->cancelarBoleto($idBoleto, $request->user()->id)
                     ? ['status' => 'success', 'tipo' => 'eliminacion']
                     : ['status' => 'error', 'msg' => 'Error al eliminar reserva'],
                 default => ['status' => 'error', 'msg' => 'Sub-acción desconocida'],

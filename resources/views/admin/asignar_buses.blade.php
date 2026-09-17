@@ -6,7 +6,7 @@ $buses = $data['buses'] ?? [];
 $choferes = $data['choferes'] ?? [];
 $copilotos = $data['copilotos'] ?? [];
 $esAdmin = !empty($data['es_admin']);
-$busesSinTipo = array_values(array_filter($buses, fn($b) => empty($b->tipo_bus_id)));
+$busesSinTipo = collect($buses)->filter(fn($b) => empty($b->tipo_bus_id))->values();
 $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 ?>
 <style>
@@ -67,7 +67,7 @@ $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
     <div class="app-content">
         <div class="container-fluid">
 
-            <?php if ($busesSinTipo): ?>
+            <?php if ($busesSinTipo->isNotEmpty()): ?>
                 <div class="alert alert-warning d-flex gap-3 align-items-start mb-3">
                     <i class="bi bi-exclamation-triangle-fill fs-5"></i>
                     <div>
@@ -314,6 +314,7 @@ $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
             }
 
             const datos = new FormData();
+            datos.append('csrf_token', CSRF);
             datos.append('id', asignacionId);
             datos.append('bus_id', bus);
             datos.append('chofer_id', choferId);
@@ -361,6 +362,7 @@ $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
         document.querySelectorAll('.js-quitar-copiloto').forEach(btn => btn.addEventListener('click', ev => {
             ev.stopPropagation();
             const datos = new FormData();
+            datos.append('csrf_token', CSRF);
             datos.append('id', btn.dataset.asignacion);
             datos.append('bus_id', btn.dataset.bus);
             datos.append('chofer_id', btn.dataset.chofer);

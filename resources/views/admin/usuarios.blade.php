@@ -13,7 +13,7 @@ foreach ($usuarios as $u) {
     $porRol[$clave] = ($porRol[$clave] ?? 0) + 1;
 }
 ksort($porRol);
-$automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && $u->estado === 'activo'));
+$automaticas = collect($usuarios)->filter(fn($u) => $u->automatica && $u->estado === 'activo')->values();
 ?>
 <main class="app-main">
     <div class="app-content-header">
@@ -33,7 +33,7 @@ $automaticas = array_values(array_filter($usuarios, fn($u) => $u->automatica && 
     <div class="app-content">
         <div class="container-fluid">
 
-            <?php if ($automaticas): ?>
+            <?php if ($automaticas->isNotEmpty()): ?>
                 <div class="alert alert-warning d-flex gap-3 align-items-start">
                     <i class="bi bi-shield-exclamation fs-5"></i>
                     <div>

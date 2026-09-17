@@ -97,6 +97,7 @@
             </div>
             <div class="modal-body">
                 <form id="formTipoBus" action="<?php echo URLROOT; ?>/admin/guardar_tipo_bus" method="POST">
+                    <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
                     <input type="hidden" name="id" id="tipoBusId">
                     <input type="hidden" name="configuracion_asientos" id="configuracionAsientos">
 
@@ -350,20 +351,12 @@
             currentPreviewFloor = 1;
         }
 
-        // Calcular distribución
-        const distribucion = calcularDistribucion(capacidad, pisos);
-
         // Crear configuración del bus
         currentBusConfig = {
             capacidad: capacidad,
             asientos_total: capacidad,
             pisos: pisos,
-            layout_config: {
-                pisos: pisos,
-                columnas: 4,
-                posicion_pasillo: 2,
-                distribucion: distribucion
-            },
+            layout_config: layoutPorDefecto(pisos, capacidad),
             asientos_ocupados: [] // Preview sin asientos ocupados
         };
 
@@ -372,7 +365,31 @@
     }
 
     /**
-     * Calcular distribución de asientos
+     * Layout por defecto segun capacidad/pisos (mismo criterio que
+     * VentasController::layoutPorDefecto en PHP, mantenerlos sincronizados).
+     * Van (1 piso, hasta 20 asientos): filas parejas de 3, sin pasillo
+     * partido -- layout real de un minibus boliviano (confirmado por el
+     * usuario: asiento central junto al chofer, bancas de 3 hasta el fondo).
+     * Bus grande o de 2 pisos: 2+2 con pasillo al centro, como siempre.
+     */
+    function layoutPorDefecto(pisos, capacidad) {
+        if (pisos === 1 && capacidad > 0 && capacidad <= 20) {
+            const filas = [];
+            let restante = capacidad;
+            while (restante > 0) {
+                const n = Math.min(3, restante);
+                filas.push(n);
+                restante -= n;
+            }
+            return { pisos: 1, columnas: 3, posicion_pasillo: 0, filas, layout: 'van-3' };
+        }
+
+        return { pisos, columnas: 4, posicion_pasillo: 2, distribucion: calcularDistribucion(capacidad, pisos), layout: '2-2' };
+    }
+
+    /**
+     * Calcular distribución de asientos (buses grandes: la usa
+     * layoutPorDefecto() para repartir asientos entre pisos)
      */
     function calcularDistribucion(capacidad, pisos) {
         if (pisos === 1) {
@@ -492,15 +509,12 @@
             return;
         }
 
-        // Guardar la configuración del diagrama como JSON
+        // Guardar la configuración del diagrama como JSON (mismo layout que
+        // ya se esta mostrando en la vista previa, no uno recalculado aparte)
         const pisos = parseInt(document.getElementById('pisosTipoBus').value);
         const configuracion = {
             capacidad: capacidad,
-            pisos: pisos,
-            layout: '2-2',
-            columnas: 4,
-            posicion_pasillo: 2,
-            distribucion: calcularDistribucion(capacidad, pisos),
+            ...layoutPorDefecto(pisos, capacidad),
             fecha_creacion: new Date().toISOString()
         };
 
@@ -584,7 +598,7 @@
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded'
                         },
-                        body: 'id=' + id
+                        body: 'id=' + id + '&csrf_token=<?php echo urlencode(csrf_token()); ?>'
                     })
                     .then(response => {
                         const contentType = response.headers.get('content-type');

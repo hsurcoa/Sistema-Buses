@@ -389,7 +389,8 @@
                     },
                     body: JSON.stringify({
                         rol_id: rolId,
-                        permisos: permisos
+                        permisos: permisos,
+                        csrf_token: '<?php echo csrf_token(); ?>'
                     })
                 })
                 .then(response => response.json())
@@ -452,7 +453,8 @@
                     },
                     body: JSON.stringify({
                         nombre: nombre,
-                        descripcion: descripcion
+                        descripcion: descripcion,
+                        csrf_token: '<?php echo csrf_token(); ?>'
                     })
                 })
                 .then(response => response.json())

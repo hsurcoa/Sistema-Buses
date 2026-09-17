@@ -14,12 +14,26 @@ use Illuminate\Http\Request;
  */
 class EncomiendasController extends Controller
 {
+    private const ROLES_GLOBALES = ['Administrador', 'Supervisor'];
+
     public function __construct(private EncomiendaService $encomiendas, private RutaService $rutas) {}
 
-    public function index()
+    /** Mismo criterio que Dashboard/Caja: solo Administrador/Supervisor ven todas las sucursales. */
+    public function index(Request $request)
     {
+        $usuario = $request->user();
+        $esGlobal = in_array($usuario->rol?->nombre, self::ROLES_GLOBALES, true);
+
+        $sucursalId = $esGlobal
+            ? ((int) $request->query('sucursal', 0) ?: null)
+            : ((int) $usuario->sucursal_id ?: null);
+
         return view('encomiendas.index', ['data' => [
-            'encomiendas' => $this->encomiendas->listarEncomiendas(),
+            'encomiendas' => $this->encomiendas->listarEncomiendas($sucursalId),
+            'es_global' => $esGlobal,
+            'sucursal_id' => $sucursalId,
+            'sucursales' => $esGlobal ? \App\Models\Terminal::where('estado', 1)->orderBy('nombre_sede')->get() : collect(),
+            'sin_sucursal' => ! $esGlobal && ! $usuario->sucursal_id,
         ]]);
     }
 

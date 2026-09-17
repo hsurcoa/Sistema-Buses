@@ -7,10 +7,22 @@
     <!-- Header -->
     <section class="content-header">
         <div class="container-fluid">
-            <div class="row mb-2">
+            <div class="row mb-2 align-items-center">
                 <div class="col-sm-6">
                     <h1 class="m-0 text-dark"><i class="fas fa-chart-line mr-2"></i> Reporte Financiero</h1>
                 </div>
+                <?php if (!empty($data['es_global'])): ?>
+                    <div class="col-sm-6">
+                        <form method="get" class="d-flex justify-content-sm-end gap-2">
+                            <select class="form-select form-select-sm w-auto" name="sucursal" onchange="this.form.submit()">
+                                <option value="">Todas las sucursales</option>
+                                <?php foreach ($data['sucursales'] as $s): ?>
+                                    <option value="<?php echo (int) $s->id; ?>" <?php echo (int) $data['sucursal_id'] === (int) $s->id ? 'selected' : ''; ?>><?php echo htmlspecialchars($s->nombre_sede); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </section>
@@ -18,6 +30,9 @@
     <!-- Main Content -->
     <section class="content">
         <div class="container-fluid">
+            <?php if (!empty($data['sin_sucursal'])): ?>
+                <div class="alert alert-warning">Su usuario no tiene sucursal asignada: no se pueden mostrar datos financieros. Pida al administrador que se la asigne.</div>
+            <?php endif; ?>
 
             <!-- 1. TARJETAS KPI -->
             <div class="row">
@@ -197,7 +212,15 @@
                     ctx.textAlign = "center";
                     ctx.fillText("No hay datos suficientes para el gráfico", canvas.width / 2, canvas.height / 2);
                 } else {
-                    new Chart(ctx, {
+                    // Chart.js pinta los ejes/etiquetas una sola vez con el color
+                    // que reciba acá; si es gris oscuro fijo (el default), en modo
+                    // oscuro queda casi ilegible sobre el fondo. Se lee el tema
+                    // actual y se repinta si el usuario lo cambia sin recargar.
+                    const esOscuro = () => document.body.classList.contains('dark-mode');
+                    const colorTexto = () => esOscuro() ? '#9ca3af' : '#666';
+                    const colorGrid = () => esOscuro() ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+
+                    const chart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: labels,
@@ -225,16 +248,26 @@
                                 x: {
                                     grid: {
                                         display: false
-                                    }
+                                    },
+                                    ticks: { color: colorTexto() }
                                 },
                                 y: {
                                     beginAtZero: true,
                                     grid: {
-                                        borderDash: [2, 4]
-                                    }
+                                        borderDash: [2, 4],
+                                        color: colorGrid()
+                                    },
+                                    ticks: { color: colorTexto() }
                                 }
                             }
                         }
+                    });
+
+                    document.addEventListener('themechange', function() {
+                        chart.options.scales.x.ticks.color = colorTexto();
+                        chart.options.scales.y.ticks.color = colorTexto();
+                        chart.options.scales.y.grid.color = colorGrid();
+                        chart.update();
                     });
                 }
             } catch (error) {
@@ -263,8 +296,12 @@
                 const formData = new FormData();
                 formData.append('fecha_inicio', inicio);
                 formData.append('fecha_fin', fin);
+                formData.append('csrf_token', '<?php echo csrf_token(); ?>');
 
-                fetch('<?php echo URLROOT; ?>/reportes/financiero_ajax', {
+                const sucursalQS = new URLSearchParams(window.location.search).get('sucursal');
+                const urlAjax = '<?php echo URLROOT; ?>/reportes/financiero_ajax' + (sucursalQS ? '?sucursal=' + encodeURIComponent(sucursalQS) : '');
+
+                fetch(urlAjax, {
                         method: 'POST',
                         body: formData
                     })

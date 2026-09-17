@@ -17,6 +17,10 @@ class VehiculoService
             'tarjeta_circulacion' => $datos['tarjeta_circulacion'],
             'placa' => $datos['placa'],
             'tipo_bus_id' => $datos['tipo_bus_id'] ?: null,
+            'soat_numero' => $datos['soat_numero'] ?: null,
+            'soat_vencimiento' => $datos['soat_vencimiento'] ?: null,
+            'itv_numero' => $datos['itv_numero'] ?: null,
+            'itv_vencimiento' => $datos['itv_vencimiento'] ?: null,
             'clase' => $datos['clase'],
             'marca' => $datos['marca'],
             'anio' => $datos['anio'],
@@ -101,6 +105,10 @@ class VehiculoService
             'tarjeta_circulacion' => $datos['tarjeta_circulacion'],
             'placa' => $datos['placa'],
             'tipo_bus_id' => $datos['tipo_bus_id'] ?: null,
+            'soat_numero' => $datos['soat_numero'] ?: null,
+            'soat_vencimiento' => $datos['soat_vencimiento'] ?: null,
+            'itv_numero' => $datos['itv_numero'] ?: null,
+            'itv_vencimiento' => $datos['itv_vencimiento'] ?: null,
             'clase' => $datos['clase'],
             'marca' => $datos['marca'],
             'anio' => $datos['anio'],
@@ -122,6 +130,45 @@ class VehiculoService
             'asientos' => $datos['asientos'],
             'tipo_servicio' => $datos['tipo_servicio'],
         ]);
+    }
+
+    /**
+     * Buses con SOAT/ITV vencidos o por vencer dentro de `$diasAviso` dias.
+     * Solo se llama si el toggle `alertas_flota_documentos_activo` esta
+     * prendido (ver ConfiguracionService) -- pensado para el banner de
+     * Registrar Buses, mismo criterio critico/aviso que ya usa esa pantalla.
+     */
+    public function alertasDocumentos(int $diasAviso = 30): array
+    {
+        $limite = now()->addDays($diasAviso)->toDateString();
+        $hoy = now()->toDateString();
+
+        $vehiculos = Vehiculo::where('estado', 1)
+            ->where(function ($q) use ($limite) {
+                $q->whereNotNull('soat_vencimiento')->where('soat_vencimiento', '<=', $limite)
+                    ->orWhere(function ($q2) use ($limite) {
+                        $q2->whereNotNull('itv_vencimiento')->where('itv_vencimiento', '<=', $limite);
+                    });
+            })
+            ->get(['id', 'placa', 'soat_vencimiento', 'itv_vencimiento']);
+
+        $criticos = [];
+        $avisos = [];
+        foreach ($vehiculos as $v) {
+            foreach ([['SOAT', $v->soat_vencimiento], ['ITV', $v->itv_vencimiento]] as [$doc, $vencimiento]) {
+                if (! $vencimiento) {
+                    continue;
+                }
+                $fecha = $vencimiento->toDateString();
+                if ($fecha < $hoy) {
+                    $criticos[] = ['id' => $v->id, 'placa' => $v->placa, 'texto' => "{$doc} vencido el ".$vencimiento->format('d/m/Y')." ({$v->placa})."];
+                } elseif ($fecha <= $limite) {
+                    $avisos[] = ['id' => $v->id, 'placa' => $v->placa, 'texto' => "{$doc} vence el ".$vencimiento->format('d/m/Y')." ({$v->placa})."];
+                }
+            }
+        }
+
+        return ['criticos' => $criticos, 'avisos' => $avisos];
     }
 
     public function eliminarBus(int $id): bool

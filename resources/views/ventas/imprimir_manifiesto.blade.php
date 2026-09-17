@@ -352,7 +352,7 @@
         </table>
 
         <div class="footer-date">
-            Generado por Sistema de Ventas | Impreso el: <?php echo date('d/m/Y H:i:s'); ?> | Usuario: <?php echo $_SESSION['user_name'] ?? 'Sistema'; ?>
+            Generado por Sistema de Ventas | Impreso el: <?php echo date('d/m/Y H:i:s'); ?> | Usuario: <?php echo auth()->user()?->nombreCompleto() ?? 'Sistema'; ?>
         </div>
 
     </div>

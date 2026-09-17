@@ -6,7 +6,7 @@
 // Refactored: Multi-Floor Bus Support with Tab Navigation
 ?>
 <!-- Content Wrapper -->
-<div class="content-wrapper" style="background-color: #f0f2f5; min-height: 100vh;">
+<div class="content-wrapper" style="min-height: 100vh;">
 
     <!-- Styles - Diseño según imagen de referencia -->
     <style>
@@ -20,8 +20,12 @@
             --orange-reserved: #ff9800;
             --gray-free: #e0e0e0;
             --gray-disabled: #bdbdbd;
-            --text-dark: #212529;
-            --text-muted: #6c757d;
+            /* Alias a los tokens del tema global (public/css/custom.css): estos
+               dos SI cambian con el modo oscuro (antes eran hex fijos y el texto
+               quedaba oscuro-sobre-oscuro o, con el fix del fondo del wrapper,
+               claro-sobre-claro segun que regla ganara la especificidad). */
+            --text-dark: var(--color-text, #212529);
+            --text-muted: var(--color-text-muted, #6c757d);
         }
 
         /* Contenedor de la pagina: ocupa todo el ancho junto al sidebar.
@@ -457,12 +461,10 @@
             font-size: 0.9rem;
         }
 
-        /* Modo oscuro (tema global: body.dark-mode, ver public/css/custom.css) */
-        body.dark-mode .vp-page .page-title,
-        body.dark-mode .form-group-custom label,
-        body.dark-mode .route-info-section .route-text {
-            color: var(--color-text);
-        }
+        /* Modo oscuro (tema global: body.dark-mode, ver public/css/custom.css).
+           .page-title / .form-group-custom label / .route-info-section .route-text
+           ya no necesitan override: usan --text-dark, que ahora es un alias de
+           --color-text (ver el :root de arriba) y cambia solo con el tema. */
         body.dark-mode .route-info-section,
         body.dark-mode .floor-tab {
             background: #262626;
@@ -984,7 +986,7 @@
 
         <?php if (!empty($data['pago_qr'])): $qr = $data['pago_qr']; ?>
         <!-- MODAL COBRO CON QR -->
-        <div class="modal fade" id="modalCobroQr" tabindex="-1" aria-labelledby="tituloCobroQr" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal fade" id="modalCobroQr" tabindex="-1" aria-labelledby="tituloCobroQr" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false" data-hay-qr-fijo="<?php echo $qr['imagen'] !== '' ? '1' : '0'; ?>">
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
@@ -993,13 +995,19 @@
                     </div>
                     <div class="modal-body">
                         <div class="row g-4 align-items-center">
+                            <?php $srcQrInicial = $qr['imagen'] !== '' ? $qr['imagen'] : 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7'; ?>
                             <div class="col-md-6 text-center">
-                                <img src="<?php echo htmlspecialchars($qr['imagen']); ?>" alt="Código QR para pagar" class="qr-cobro-img">
-                                <?php if ($qr['titular'] || $qr['entidad']): ?>
-                                    <div class="small text-muted mt-2">
-                                        <?php echo htmlspecialchars(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?>
-                                    </div>
-                                <?php endif; ?>
+                                <!-- Elegir entre el QR fijo (cargado en Configuración) y el de Libélula
+                                     (generado por transacción): ambos pueden coexistir, el cajero elige
+                                     cuál mostrarle al pasajero. -->
+                                <div class="btn-group btn-group-sm mb-2 d-none" id="tabsCobroQr" role="group">
+                                    <button type="button" class="btn btn-outline-primary" id="tabQrFijo" onclick="mostrarQrOpcion('fijo')">QR Fijo</button>
+                                    <button type="button" class="btn btn-outline-primary" id="tabQrLibelula" onclick="mostrarQrOpcion('libelula')">Libélula</button>
+                                </div>
+                                <img id="imgCobroQr" src="<?php echo htmlspecialchars($srcQrInicial); ?>" data-src-fijo="<?php echo htmlspecialchars($srcQrInicial); ?>" data-src-libelula="" alt="Código QR para pagar" class="qr-cobro-img">
+                                <div class="small text-muted mt-2" id="leyendaCobroQr" data-leyenda-fija="<?php echo htmlspecialchars(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?>" data-leyenda-libelula="Libélula">
+                                    <?php echo htmlspecialchars(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="text-muted small text-uppercase fw-bold">Monto a pagar</div>
@@ -1935,7 +1943,12 @@
                         confirmButtonText: 'Sí, eliminar',
                         confirmButtonColor: '#d33'
                     }).then((result) => {
-                        if (result.isConfirmed) enviarGestion(id, accion, estadoNuevo);
+                        if (!result.isConfirmed) return;
+
+                        pedirDatosDevolucion(id).then(extra => {
+                            if (extra === null) return;
+                            enviarGestion(id, accion, estadoNuevo, extra);
+                        });
                     });
                     return;
                 }
@@ -1943,7 +1956,7 @@
                 enviarGestion(id, accion, estadoNuevo);
             }
 
-            function enviarGestion(id, accion, estadoNuevo) {
+            function enviarGestion(id, accion, estadoNuevo, extraDevolucion = null) {
                 const data = {
                     id: id,
                     csrf_token: CSRF_TOKEN,
@@ -1957,6 +1970,12 @@
                     asiento: $('#edit_asiento_nuevo').val(),
                     estado_nuevo: estadoNuevo
                 };
+
+                if (extraDevolucion) {
+                    data.devuelto = extraDevolucion.devuelto;
+                    data.metodo_devolucion = extraDevolucion.metodo_devolucion;
+                    data.motivo = extraDevolucion.motivo;
+                }
 
                 $.post(`${URLROOT}/ventas/gestion_boleto`, data, function(res) {
                     let r = (typeof res === 'string') ? JSON.parse(res) : res;
@@ -1996,6 +2015,66 @@
                 });
             }
 
+            /**
+             * Antes de cancelar un boleto ya pagado hay que preguntar si se le
+             * devolvió el dinero al pasajero (queda en la bitácora de
+             * cancelaciones y, si corresponde, se refleja como egreso en caja).
+             * Devuelve una Promise que resuelve con {devuelto, metodo_devolucion, motivo}
+             * (devuelto=null si el boleto no estaba pagado, nada que preguntar),
+             * o null si el usuario decidió no continuar con la cancelación.
+             */
+            function pedirDatosDevolucion(id) {
+                return $.getJSON(`${URLROOT}/ventas/estado_cancelacion/${id}`).then(info => {
+                    if (!info || !info.requiere_devolucion) {
+                        return { devuelto: null, metodo_devolucion: null, motivo: null };
+                    }
+
+                    return Swal.fire({
+                        title: 'Este boleto ya fue pagado',
+                        html: `
+                            <p class="text-start mb-2">Monto: <b>Bs. ${parseFloat(info.monto).toFixed(2)}</b> (${info.metodo_pago})</p>
+                            <label class="form-label text-start d-block mb-1">¿Se devolvió el dinero al pasajero?</label>
+                            <select id="swalDevuelto" class="form-select mb-2">
+                                <option value="0">No, no se devolvió</option>
+                                <option value="1">Sí, se devolvió</option>
+                            </select>
+                            <div id="swalMetodoWrap" style="display:none">
+                                <label class="form-label text-start d-block mb-1">Método de devolución</label>
+                                <select id="swalMetodoDevolucion" class="form-select mb-2">
+                                    <option value="EFECTIVO">Efectivo (sale de la caja abierta)</option>
+                                    <option value="QR">Transferencia / QR</option>
+                                    <option value="OTRO">Otro</option>
+                                </select>
+                            </div>
+                            <label class="form-label text-start d-block mb-1">Motivo (opcional)</label>
+                            <input id="swalMotivoCancelacion" class="form-control" placeholder="Ej: pasajero no pudo viajar">
+                        `,
+                        didOpen: () => {
+                            const sel = document.getElementById('swalDevuelto');
+                            const wrap = document.getElementById('swalMetodoWrap');
+                            const metodoSel = document.getElementById('swalMetodoDevolucion');
+                            if (info.metodo_pago === 'QR') metodoSel.value = 'QR';
+                            sel.addEventListener('change', () => {
+                                wrap.style.display = sel.value === '1' ? 'block' : 'none';
+                            });
+                        },
+                        showCancelButton: true,
+                        confirmButtonText: 'Continuar',
+                        cancelButtonText: 'No cancelar el boleto',
+                        focusConfirm: false,
+                        preConfirm: () => {
+                            const devuelto = document.getElementById('swalDevuelto').value === '1';
+
+                            return {
+                                devuelto: devuelto,
+                                metodo_devolucion: devuelto ? document.getElementById('swalMetodoDevolucion').value : null,
+                                motivo: document.getElementById('swalMotivoCancelacion').value.trim() || null,
+                            };
+                        }
+                    }).then(r => r.isConfirmed ? r.value : null);
+                }).fail(() => ({ devuelto: null, metodo_devolucion: null, motivo: null }));
+            }
+
             function eliminarBoleto(id) {
                 Swal.fire({
                     title: '¿Eliminar boleto?',
@@ -2007,20 +2086,35 @@
                     confirmButtonText: 'Sí, eliminar',
                     cancelButtonText: 'Cancelar'
                 }).then((result) => {
-                    if (result.isConfirmed) {
+                    if (!result.isConfirmed) return;
+
+                    pedirDatosDevolucion(id).then(extra => {
+                        if (extra === null) return;
+
                         $.post(`${URLROOT}/ventas/cancelar_boleto/${id}`, {
-                            csrf_token: CSRF_TOKEN
+                            csrf_token: CSRF_TOKEN,
+                            devuelto: extra.devuelto,
+                            metodo_devolucion: extra.metodo_devolucion,
+                            motivo: extra.motivo
                         }, function(res) {
+                            if (res && res.status && res.status !== 'success') {
+                                Swal.fire('Error', res.mensaje || 'No se pudo eliminar el boleto', 'error');
+                                return;
+                            }
                             Swal.fire('Eliminado', 'El boleto ha sido eliminado', 'success');
+                            // select_viaje puede no tener el <option> del viaje actual
+                            // (p. ej. al entrar por URL con ?viaje_id=): sin este respaldo,
+                            // viajeId quedaba vacio y las recargas pegaban a
+                            // ".../obtener_ruta_viaje/" sin id (404 -> "Error de conexión").
+                            const viajeId = $('#select_viaje').val() || currentViajeId;
                             // Recargar tabla
-                            const viajeId = $('#select_viaje').val();
                             cargarTablaPasajeros(viajeId);
                             // Recargar diagrama
                             cargarDiagramaBus(viajeId);
                         }).fail(function() {
                             Swal.fire('Error', 'No se pudo eliminar el boleto', 'error');
                         });
-                    }
+                    });
                 });
             }
 
@@ -2153,7 +2247,7 @@
                 });
             }
 
-            function abrirCobroQr(ticket, viajeId) {
+            function abrirCobroQr(ticket, viajeId, libelula) {
                 const modalEl = document.getElementById('modalCobroQr');
                 if (!modalEl || !ticket) return;
 
@@ -2168,8 +2262,48 @@
                 marcarEstadoQr('Esperando pago', 'bg-warning-subtle text-warning-emphasis');
                 document.getElementById('btnConfirmarQr').disabled = false;
 
+                // Si Libélula generó un QR dinámico para este cobro, queda disponible
+                // como pestaña junto al QR fijo (si hay uno cargado en Configuración):
+                // el cajero elige cuál mostrarle al pasajero, ninguno tapa al otro.
+                const imgQr = document.getElementById('imgCobroQr');
+                const tabs = document.getElementById('tabsCobroQr');
+                const hayQrFijo = modalEl.dataset.hayQrFijo === '1';
+                const hayLibelula = !!(libelula && libelula.qr_simple_url);
+
+                if (imgQr) {
+                    imgQr.dataset.srcLibelula = hayLibelula ? libelula.qr_simple_url : '';
+                }
+
+                if (tabs) {
+                    tabs.classList.toggle('d-none', !(hayQrFijo && hayLibelula));
+                    document.getElementById('tabQrFijo').disabled = !hayQrFijo;
+                    document.getElementById('tabQrLibelula').disabled = !hayLibelula;
+                }
+
+                // Por defecto se muestra Libélula si está disponible (confirmación
+                // automática por webhook); si no, el QR fijo (confirmación manual).
+                mostrarQrOpcion(hayLibelula ? 'libelula' : 'fijo');
+
                 bootstrap.Modal.getOrCreateInstance(modalEl).show();
                 seguirCobroQr();
+            }
+
+            /** Cambia entre el QR fijo (Configuración) y el QR dinámico de Libélula dentro del modal de cobro. */
+            function mostrarQrOpcion(opcion) {
+                const imgQr = document.getElementById('imgCobroQr');
+                const leyendaQr = document.getElementById('leyendaCobroQr');
+                if (!imgQr || !leyendaQr) return;
+
+                const esLibelula = opcion === 'libelula' && imgQr.dataset.srcLibelula;
+                imgQr.src = esLibelula ? imgQr.dataset.srcLibelula : imgQr.dataset.srcFijo;
+                leyendaQr.textContent = esLibelula ? leyendaQr.dataset.leyendaLibelula : leyendaQr.dataset.leyendaFija;
+
+                const tabFijo = document.getElementById('tabQrFijo');
+                const tabLibelula = document.getElementById('tabQrLibelula');
+                if (tabFijo && tabLibelula) {
+                    tabFijo.classList.toggle('active', !esLibelula);
+                    tabLibelula.classList.toggle('active', esLibelula);
+                }
             }
 
             function seguirCobroQr() {
@@ -2181,7 +2315,13 @@
                             if (!cobroQr || !res.success) return;
                             const d = res.data;
                             cobroQr.segundos = parseInt(d.segundos_restantes || 0, 10);
-                            if (d.estado === 'cancelado') {
+                            if (d.estado === 'vendido') {
+                                // Libélula confirmó el pago solo (sin que el cajero apriete nada):
+                                // ver VentasController::estadoCobro() + RutaService::intentarConfirmarLibelula().
+                                marcarEstadoQr('Pagado', 'bg-success');
+                                finalizarCobroQr('success', '¡Pago recibido!', 'Libélula confirmó el pago automáticamente. Boleto emitido.');
+                                if (res.ticket) imprimirBoleto(res.ticket);
+                            } else if (d.estado === 'cancelado') {
                                 finalizarCobroQr('warning', 'El tiempo para pagar venció', 'El asiento se liberó. Si el pasajero ya pagó, vuelva a iniciar la venta y confírmela.');
                             }
                         })
@@ -2214,12 +2354,38 @@
                 const viajeId = cobroQr ? cobroQr.viajeId : null;
                 cerrarSeguimientoQr();
                 cobroQr = null;
-                bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCobroQr')).hide();
-                if (viajeId) {
-                    cargarDiagramaBus(viajeId);
-                    if (typeof cargarTablaPasajeros === 'function') cargarTablaPasajeros(viajeId);
-                }
-                if (titulo) Swal.fire({ icon: icono, title: titulo, text: texto });
+
+                const modalEl = document.getElementById('modalCobroQr');
+                const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+                let yaContinuo = false;
+                const continuar = () => {
+                    if (yaContinuo) return;
+                    yaContinuo = true;
+
+                    // modalCobroQr usa backdrop:"static": .hide() de Bootstrap anima
+                    // ~300ms antes de sacar el <div class="modal-backdrop">. Si el
+                    // Swal de abajo aparece mientras esa transición sigue en curso,
+                    // Bootstrap puede quedarse sin limpiar su backdrop -- la pantalla
+                    // queda con el fondo gris pegado y nada responde. Se limpia a mano
+                    // como red de seguridad, pase lo que pase con la animación.
+                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                    document.body.classList.remove('modal-open');
+                    document.body.style.removeProperty('overflow');
+                    document.body.style.removeProperty('padding-right');
+
+                    if (viajeId) {
+                        cargarDiagramaBus(viajeId);
+                        if (typeof cargarTablaPasajeros === 'function') cargarTablaPasajeros(viajeId);
+                    }
+                    if (titulo) Swal.fire({ icon: icono, title: titulo, text: texto });
+                };
+
+                modalEl.addEventListener('hidden.bs.modal', continuar, { once: true });
+                modal.hide();
+                // Respaldo por si el evento "hidden.bs.modal" no llega a disparar
+                // (ej. el modal ya estaba cerrado, o el navegador saltea la transición).
+                setTimeout(continuar, 400);
             }
 
             function confirmarCobroQr() {
@@ -2340,7 +2506,7 @@
                                 asientoSeleccionado = null;
                                 $('#inputAsiento').val('');
                                 $('#displayAsiento').text('--');
-                                abrirCobroQr(res.ticket, idViaje);
+                                abrirCobroQr(res.ticket, idViaje, res.libelula);
                                 return;
                             }
 
@@ -2585,7 +2751,13 @@
                     confirmButtonText: '<i class="bi bi-trash me-2"></i>Sí, eliminar',
                     cancelButtonText: '<i class="bi bi-x-circle me-2"></i>Cancelar'
                 }).then((result) => {
-                    if (result.isConfirmed) {
+                    if (!result.isConfirmed) return;
+
+                    const idBoleto = $('#inputBoletoId').val();
+
+                    pedirDatosDevolucion(idBoleto).then(extra => {
+                        if (extra === null) return;
+
                         // Mostrar loading
                         Swal.fire({
                             title: 'Eliminando...',
@@ -2596,9 +2768,16 @@
                             }
                         });
 
-                        $.post(`${URLROOT}/ventas/cancelar_boleto/${$('#inputBoletoId').val()}`, {
-                            csrf_token: CSRF_TOKEN
-                        }, () => {
+                        $.post(`${URLROOT}/ventas/cancelar_boleto/${idBoleto}`, {
+                            csrf_token: CSRF_TOKEN,
+                            devuelto: extra.devuelto,
+                            metodo_devolucion: extra.metodo_devolucion,
+                            motivo: extra.motivo
+                        }, (res) => {
+                            if (res && res.status && res.status !== 'success') {
+                                Swal.fire({ icon: 'error', title: 'Error', text: res.mensaje || 'No se pudo eliminar el boleto', confirmButtonColor: '#d33' });
+                                return;
+                            }
                             Swal.fire({
                                 icon: 'success',
                                 title: '¡Eliminado!',
@@ -2607,7 +2786,7 @@
                                 showConfirmButton: false
                             });
                             limpiarFormulario(true);
-                            cargarDiagramaBus($('#select_viaje').val());
+                            cargarDiagramaBus($('#select_viaje').val() || currentViajeId);
                         }).fail(() => {
                             Swal.fire({
                                 icon: 'error',
@@ -2616,7 +2795,7 @@
                                 confirmButtonColor: '#d33'
                             });
                         });
-                    }
+                    });
                 });
             }
 

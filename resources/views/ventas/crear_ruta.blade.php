@@ -13,7 +13,7 @@
                         <ol class="breadcrumb">
                             <li class="breadcrumb-item"><a href="<?php echo URLROOT; ?>/dashboard">Inicio</a></li>
                             <li class="breadcrumb-item">Ventas</li>
-                            <li class="breadcrumb-item active">Crear Rutas</li>
+                            <li class="breadcrumb-item active">Vender Pasajes</li>
                         </ol>
                     </nav>
                 </div>
@@ -24,75 +24,33 @@
                 <div class="col-12">
                     <div class="d-flex justify-content-between align-items-center">
                         <h1 class="mb-0">
-                            <i class="bi bi-plus-circle-fill text-primary me-2"></i>
-                            Crear Rutas de Viaje
+                            <i class="bi bi-ticket-perforated-fill text-primary me-2"></i>
+                            Vender Pasajes
                         </h1>
                         <button class="btn btn-primary" onclick="abrirModalNuevaRuta()">
-                            <i class="bi bi-plus-lg me-2"></i>Nueva Ruta
+                            <i class="bi bi-plus-lg me-2"></i>Crear Ruta
                         </button>
                     </div>
                 </div>
             </div>
 
-            <!-- Tarjetas de Resumen -->
-            <div class="row g-3 mb-4">
-                <div class="col-md-3">
-                    <div class="card text-white bg-primary">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="card-title mb-0">Rutas Activas</h6>
-                                    <h2 class="mb-0">
-                                        <?php echo count($data['rutas'] ?? []); ?>
-                                    </h2>
-                                </div>
-                                <i class="bi bi-map" style="font-size: 3rem; opacity: 0.3;"></i>
-                            </div>
-                        </div>
-                    </div>
+            <!-- Tarjetas de Resumen (componente global .tool-card, ver public/css/custom.css) -->
+            <div class="tool-grid mb-4">
+                <div class="tool-card tool-card--compact tool-card--blue">
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-map"></i></span> Rutas Activas</div>
+                    <div class="kpi-valor"><?php echo count($data['rutas'] ?? []); ?></div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card text-white bg-success">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="card-title mb-0">Tipos de Buses</h6>
-                                    <h2 class="mb-0">
-                                        <?php echo count($data['tiposBuses'] ?? []); ?>
-                                    </h2>
-                                </div>
-                                <i class="bi bi-bus-front" style="font-size: 3rem; opacity: 0.3;"></i>
-                            </div>
-                        </div>
-                    </div>
+                <div class="tool-card tool-card--compact tool-card--green">
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-bus-front"></i></span> Tipos de Buses</div>
+                    <div class="kpi-valor"><?php echo count($data['tiposBuses'] ?? []); ?></div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card text-white bg-info">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="card-title mb-0">Terminales</h6>
-                                    <h2 class="mb-0">
-                                        <?php echo count($data['terminales'] ?? []); ?>
-                                    </h2>
-                                </div>
-                                <i class="bi bi-building" style="font-size: 3rem; opacity: 0.3;"></i>
-                            </div>
-                        </div>
-                    </div>
+                <div class="tool-card tool-card--compact tool-card--purple">
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-building"></i></span> Terminales</div>
+                    <div class="kpi-valor"><?php echo count($data['terminales'] ?? []); ?></div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card text-white bg-warning">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="card-title mb-0">Viajes Hoy</h6>
-                                    <h2 class="mb-0">0</h2>
-                                </div>
-                                <i class="bi bi-calendar-check" style="font-size: 3rem; opacity: 0.3;"></i>
-                            </div>
-                        </div>
-                    </div>
+                <div class="tool-card tool-card--compact tool-card--orange">
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-calendar-check"></i></span> Viajes Hoy</div>
+                    <div class="kpi-valor">0</div>
                 </div>
             </div>
 
@@ -111,7 +69,7 @@
                                 <table class="table table-hover table-striped">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th>Venta</th>
+                                            <th>Vender</th>
                                             <th>Ruta</th>
                                             <th>Fecha/Hora Salida</th>
                                             <th>Hora Llegada</th>
@@ -130,8 +88,8 @@
                                             <?php foreach ($data['viajesProgramados'] as $viaje): ?>
                                                 <tr>
                                                     <td class="align-middle text-center">
-                                                        <button class="btn btn-info text-white btn-sm rounded-circle shadow hover-bounce p-2" onclick="abrirVenta(<?php echo $viaje->id; ?>)" title="Venta Rápida">
-                                                            <i class="bi bi-bus-front-fill fs-5"></i>
+                                                        <button class="btn btn-success text-white fw-bold shadow-sm rounded-pill px-3 py-2 btn-vender-grande" onclick="abrirVenta(<?php echo $viaje->id; ?>)" title="Vender pasajes de este viaje">
+                                                            <i class="bi bi-ticket-perforated-fill me-1"></i> Vender
                                                         </button>
                                                     </td>
                                                     <td class="align-middle">
@@ -641,6 +599,18 @@
         transform: translateY(-3px);
     }
 
+    /* Boton "Vender" grande y evidente por fila (antes era solo un icono
+       chico sin texto, ver captura del usuario: no era obvio que ahi se
+       vendia). */
+    .btn-vender-grande {
+        font-size: .95rem;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .btn-vender-grande:hover {
+        transform: translateY(-2px) scale(1.04);
+        box-shadow: 0 6px 16px rgba(25, 135, 84, .35) !important;
+    }
+
     /* Glassmorphism subtle applied to cards mostly, but clean white for modal is better for forms */
     .modal-content {
         border-radius: 24px !important;
@@ -689,6 +659,30 @@
 
     .modal.show .modal-dialog {
         transform: scale(1) translateY(0);
+    }
+
+    /* Modal Nueva/Editar Ruta: mas ancho (mejor aprovecha las 3 columnas de
+       cada tab) y con altura acotada (antes obligaba a scrollear la pagina
+       entera detras del backdrop en vez de solo el contenido del modal). */
+    #modalNuevaRuta .modal-dialog {
+        max-width: min(96vw, 1320px);
+    }
+    #modalNuevaRuta .modal-content {
+        max-height: 88vh;
+    }
+    #modalNuevaRuta .modal-body {
+        max-height: calc(88vh - 96px);
+        overflow-y: auto;
+    }
+    #modalNuevaRuta .card-body {
+        padding: 1rem 1.25rem !important;
+    }
+    #modalNuevaRuta .card-title.mb-4 {
+        margin-bottom: 1rem !important;
+    }
+    #modalNuevaRuta .row.g-4 {
+        --bs-gutter-x: 1rem;
+        --bs-gutter-y: 0.75rem;
     }
 </style>
 
@@ -785,21 +779,41 @@
             return;
         }
 
+        const esEdicion = !!document.getElementById('rutaViajeId').value;
+
         // Mostrar confirmación
         Swal.fire({
-            title: '¿Confirmar Creación?',
-            text: 'Se creará una nueva ruta de viaje con la información proporcionada',
+            title: esEdicion ? '¿Confirmar Actualización?' : '¿Confirmar Creación?',
+            text: esEdicion
+                ? 'Se actualizará el viaje con la información proporcionada'
+                : 'Se creará una nueva ruta de viaje con la información proporcionada',
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#667eea',
             cancelButtonColor: '#6c757d',
-            confirmButtonText: 'Sí, crear ruta',
+            confirmButtonText: esEdicion ? 'Sí, actualizar' : 'Sí, crear ruta',
             cancelButtonText: 'Cancelar'
         }).then((result) => {
-            if (result.isConfirmed) {
-                // Enviar formulario
-                form.submit();
-            }
+            if (!result.isConfirmed) return;
+
+            // Antes esto hacia form.submit() (navegacion completa a una pagina
+            // aparte que dependia de recargar SweetAlert2 desde el CDN para
+            // mostrar cualquier cosa); por AJAX se queda en esta misma pagina,
+            // que ya tiene Swal cargado y funcionando.
+            Swal.fire({ title: 'Guardando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            $.post(form.action, $(form).serialize())
+                .done(function(res) {
+                    if (res && res.success) {
+                        Swal.fire({ icon: 'success', title: '¡Éxito!', text: res.mensaje || 'Guardado correctamente', confirmButtonColor: '#667eea' })
+                            .then(() => window.location.reload());
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: (res && res.mensaje) || 'No se pudo guardar', confirmButtonColor: '#667eea' });
+                    }
+                })
+                .fail(function() {
+                    Swal.fire({ icon: 'error', title: 'Error de Conexión', text: 'No se pudo comunicar con el servidor', confirmButtonColor: '#667eea' });
+                });
         });
     }
 
@@ -894,7 +908,7 @@
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: 'tipo_id=' + tipoId
+                body: 'tipo_id=' + tipoId + '&csrf_token=<?php echo urlencode(csrf_token()); ?>'
             })
             .then(response => response.json())
             .then(data => {
@@ -999,7 +1013,7 @@
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: 'bus_id=' + busId
+                body: 'bus_id=' + busId + '&csrf_token=<?php echo urlencode(csrf_token()); ?>'
             })
             .then(response => response.json())
             .then(data => {
@@ -1273,6 +1287,10 @@
     .nav-pills .nav-link.active {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        /* Sin esto el texto/ícono heredaban el indigo (#4f46e5) de la regla
+           de mas arriba, que sobre este mismo degradado quedaba casi
+           invisible por falta de contraste. */
+        color: #fff !important;
     }
 
     /* Form controls mejorados */
@@ -2635,7 +2653,7 @@
                                     headers: {
                                         'Content-Type': 'application/x-www-form-urlencoded'
                                     },
-                                    body: 'tipo_id=' + tipoBusId
+                                    body: 'tipo_id=' + tipoBusId + '&csrf_token=<?php echo urlencode(csrf_token()); ?>'
                                 })
                                 .then(r => r.json())
                                 .then(data => {

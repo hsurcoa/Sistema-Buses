@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LibelulaCobro;
 use App\Models\Terminal;
 use App\Services\CajaService;
 use App\Services\ConfiguracionService;
+use App\Services\LibelulaService;
 use App\Services\RutaService;
 use App\Services\TipoBusService;
 use App\Services\TramoService;
@@ -25,13 +27,51 @@ class VentasController extends Controller
         private TipoBusService $tiposBus,
         private CajaService $caja,
         private ConfiguracionService $config,
+        private LibelulaService $libelula,
     ) {}
 
-    private function noCache(Response $response): Response
+    private function noCache(Response|\Illuminate\Http\JsonResponse $response): Response|\Illuminate\Http\JsonResponse
     {
         return $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('Expires', '0');
+    }
+
+    /**
+     * Layout por defecto cuando el tipo de bus no tiene `configuracion_asientos`
+     * propia todavia (solo pasa con tipos viejos guardados antes de este
+     * cambio; el formulario de Tipos de Buses ya guarda uno siempre). Van
+     * (1 piso, hasta 20 asientos): filas parejas de 3 sin pasillo partido,
+     * como un minibus real boliviano (confirmado por el usuario). Bus grande
+     * o de 2 pisos: 2+2 con pasillo al centro, el layout de coach de toda la
+     * vida. Mismo criterio replicado en resources/views/admin/tipos_buses.blade.php.
+     */
+    private static function layoutPorDefecto(int $pisos, int $capacidad): array
+    {
+        if ($pisos === 1 && $capacidad > 0 && $capacidad <= 20) {
+            return [
+                'pisos' => 1,
+                'columnas' => 3,
+                'posicion_pasillo' => 0,
+                'filas' => self::filasDeATres($capacidad),
+                'asientos_total' => $capacidad,
+            ];
+        }
+
+        return ['pisos' => $pisos ?: 1, 'columnas' => 4, 'posicion_pasillo' => 2, 'asientos_total' => $capacidad ?: 40];
+    }
+
+    /** Filas parejas de 3 asientos; el resto (si no es multiplo de 3) va en la ultima. */
+    private static function filasDeATres(int $capacidad): array
+    {
+        $filas = [];
+        $restante = $capacidad;
+        while ($restante > 0) {
+            $filas[] = min(3, $restante);
+            $restante -= min(3, $restante);
+        }
+
+        return $filas;
     }
 
     /**
@@ -47,10 +87,20 @@ class VentasController extends Controller
 
         $cfg = $this->config->obtenerConfiguracion();
 
+        // El QR fijo de Configuración y Libélula son dos formas de mostrar el
+        // botón "Cobrar con QR": si hay QR fijo cargado se usa esa imagen de
+        // entrada (luego reemplazada por la de Libélula al cobrar, si aplica);
+        // si no hay QR fijo pero Libélula está activo, el botón igual debe
+        // aparecer (placeholder vacío, la imagen real llega recién al cobrar).
+        $pagoQr = $this->config->obtenerPagoQr($sucursalVenta);
+        if (! $pagoQr && $this->libelula->estaActivo()) {
+            $pagoQr = ['imagen' => '', 'titular' => '', 'entidad' => 'Libélula', 'instrucciones' => '', 'minutos' => 15, 'origen' => 'libelula'];
+        }
+
         $data = [
             'title' => 'Venta de Pasajes',
             'viajesProgramados' => $viajesProgramados,
-            'pago_qr' => $this->config->obtenerPagoQr($sucursalVenta),
+            'pago_qr' => $pagoQr,
             'sucursal_venta' => $sucursalVenta ? Terminal::find($sucursalVenta) : null,
             'empresa' => ['nombre' => $cfg['empresa_nombre'] ?? SITENAME, 'nit' => $cfg['empresa_nit'] ?? ''],
         ];
@@ -76,9 +126,16 @@ class VentasController extends Controller
     }
 
     /**
-     * Guardar nueva ruta de viaje (o editar una existente). Responde con una
-     * pagina HTML autonoma (SweetAlert2 + redirect), igual que el legacy: el
-     * formulario objetivo es un iframe/submit clasico, no AJAX.
+     * Guardar nueva ruta de viaje (o editar una existente).
+     *
+     * El JS del formulario manda esto por AJAX y espera JSON. Antes hacia un
+     * form.submit() clasico (pensado para un iframe oculto que nunca llego a
+     * existir) y esta accion respondia una pagina aparte que era solo un
+     * <script>Swal.fire(...)</script> sin ningun contenido visible: si el
+     * CDN de SweetAlert2 no cargaba a tiempo en esa segunda navegacion (nada
+     * raro en un XAMPP local), el usuario se quedaba viendo una pantalla en
+     * blanco. Se mantiene la respuesta en vista solo por si algo externo
+     * sigue posteando esto como formulario clasico.
      */
     public function guardarRutaViaje(Request $request)
     {
@@ -100,23 +157,31 @@ class VentasController extends Controller
             'estado' => $request->input('estado', 'Programado'),
         ];
 
-        $render = fn (string $icon, string $title, string $text) => response()->view('ventas.respuesta_swal', [
-            'icon' => $icon, 'title' => $title, 'text' => $text,
-            'redirect' => URLROOT.'/ventas/crear_ruta',
-        ]);
+        $esAjax = $request->ajax() || $request->wantsJson();
+
+        $responder = function (bool $ok, string $icon, string $title, string $text) use ($esAjax) {
+            if ($esAjax) {
+                return response()->json(['success' => $ok, 'mensaje' => $text]);
+            }
+
+            return response()->view('ventas.respuesta_swal', [
+                'icon' => $icon, 'title' => $title, 'text' => $text,
+                'redirect' => URLROOT.'/ventas/crear_ruta',
+            ]);
+        };
 
         if (empty($data['ruta_id']) || empty($data['tipo_bus_id']) || empty($data['fecha_salida'])) {
-            return $render('error', 'Error de Validación', 'Complete todos los campos obligatorios');
+            return $responder(false, 'error', 'Error de Validación', 'Complete todos los campos obligatorios');
         }
 
         try {
             $resultado = $this->rutas->guardarRutaViaje($data);
 
             return $resultado === true
-                ? $render('success', '¡Éxito!', 'Ruta de viaje guardada exitosamente')
-                : $render('error', 'Error', (string) $resultado);
+                ? $responder(true, 'success', '¡Éxito!', 'Ruta de viaje guardada exitosamente')
+                : $responder(false, 'error', 'Error', (string) $resultado);
         } catch (\Exception $e) {
-            return $render('error', 'Error del Sistema', $e->getMessage());
+            return $responder(false, 'error', 'Error del Sistema', $e->getMessage());
         }
     }
 
@@ -142,12 +207,12 @@ class VentasController extends Controller
         if ($tipoBus) {
             $viaje->layout_config = ! empty($tipoBus->configuracion_asientos)
                 ? json_decode($tipoBus->configuracion_asientos, true)
-                : ['pisos' => $tipoBus->pisos ?? 1, 'columnas' => 4, 'posicion_pasillo' => 2, 'asientos_total' => $tipoBus->capacidad ?? 40];
+                : self::layoutPorDefecto((int) ($tipoBus->pisos ?? 1), (int) ($tipoBus->capacidad ?? 40));
             $viaje->asientos_total = $tipoBus->capacidad ?? 40;
             $viaje->pisos = $tipoBus->pisos ?? 1;
             $viaje->nombre_tipo_bus = $tipoBus->nombre ?? 'Bus Estándar';
         } else {
-            $viaje->layout_config = ['pisos' => 1, 'columnas' => 4, 'posicion_pasillo' => 2, 'asientos_total' => 40];
+            $viaje->layout_config = self::layoutPorDefecto(1, 40);
             $viaje->asientos_total = 40;
             $viaje->pisos = 1;
             $viaje->nombre_tipo_bus = 'Bus Estándar';
@@ -375,12 +440,36 @@ class VentasController extends Controller
         }
     }
 
-    /** Cancelar boleto / liberar reserva. */
-    public function cancelarBoleto(int $id)
+    /** Cancelar boleto / liberar reserva. Si ya estaba pagado, requiere indicar si hubo devolución. */
+    public function cancelarBoleto(Request $request, int $id)
     {
-        return $this->rutas->cancelarBoleto($id)
-            ? response()->json(['status' => 'success', 'success' => true, 'mensaje' => 'Reserva eliminada'])
-            : response()->json(['status' => 'error', 'success' => false, 'mensaje' => 'Error al cancelar']);
+        try {
+            $devuelto = $request->filled('devuelto') ? filter_var($request->input('devuelto'), FILTER_VALIDATE_BOOLEAN) : null;
+
+            $ok = $this->rutas->cancelarBoleto(
+                $id,
+                $request->user()->id,
+                $devuelto,
+                $request->filled('metodo_devolucion') ? $request->input('metodo_devolucion') : null,
+                $request->filled('motivo') ? $request->input('motivo') : null
+            );
+
+            return $ok
+                ? response()->json(['status' => 'success', 'success' => true, 'mensaje' => 'Reserva eliminada'])
+                : response()->json(['status' => 'error', 'success' => false, 'mensaje' => 'Error al cancelar']);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => 'error', 'success' => false, 'mensaje' => $e->getMessage()]);
+        }
+    }
+
+    /** Info que el frontend necesita antes de cancelar: ¿el boleto ya fue pagado? ¿cuánto y con qué método? */
+    public function estadoCancelacion(int $id)
+    {
+        $info = $this->rutas->infoParaCancelar($id);
+
+        return $info
+            ? response()->json($info)
+            : response()->json(['requiere_devolucion' => false, 'monto' => 0, 'metodo_pago' => null], 404);
     }
 
     /**
@@ -480,10 +569,23 @@ class VentasController extends Controller
     public function estadoCobro(int $id)
     {
         $this->rutas->liberarCobrosQrVencidos();
+        // Sustituto activo del webhook de Libélula (ver RutaService::intentarConfirmarLibelula):
+        // el polling que ya hace esta pantalla cada pocos segundos aprovecha para preguntarle
+        // directamente a Libélula si el pago llegó, sin depender de que le pueda avisar a una
+        // URL pública que en local no existe.
+        $confirmadoRecien = $this->rutas->intentarConfirmarLibelula($id);
         $cobro = $this->rutas->estadoCobroBoleto($id);
 
+        $payload = ['data' => $cobro];
+        // Si se acaba de confirmar en esta misma llamada, el modal/pantalla del
+        // pasajero necesita el ticket completo para imprimirlo automáticamente
+        // (estadoCobroBoleto() solo trae los datos minimos para la pantalla del pasajero).
+        if ($confirmadoRecien) {
+            $payload['ticket'] = $this->rutas->obtenerDatosTicket($id);
+        }
+
         return $this->noCache(response()->json(
-            $cobro ? ['success' => true, 'data' => $cobro] : ['success' => false],
+            $cobro ? array_merge(['success' => true], $payload) : ['success' => false],
             200,
             [],
             JSON_UNESCAPED_UNICODE
@@ -494,12 +596,20 @@ class VentasController extends Controller
     public function pantallaQr(int $id)
     {
         $cobro = $this->rutas->estadoCobroBoleto($id);
+        $cobroLibelula = LibelulaCobro::where('boleto_id', $id)->whereIn('estado', ['pendiente', 'pagado', 'pagado_sin_aplicar'])->latest('id')->first();
 
         return view('ventas.pantalla_qr', [
             'data' => [
                 'cobro' => $cobro,
                 'config' => $this->config->obtenerConfiguracion(),
-                'qr' => $this->config->obtenerPagoQr($cobro->sucursal_id ?? null),
+                // El pasajero puede tener las dos opciones disponibles a la vez: el
+                // QR fijo cargado en Configuración y el QR dinámico de Libélula (si
+                // se generó para este boleto). Ninguno tapa al otro.
+                'qr_fijo' => $this->config->obtenerPagoQr($cobro->sucursal_id ?? null),
+                'qr_libelula' => ($cobroLibelula && $cobroLibelula->qr_simple_url)
+                    ? ['imagen' => $cobroLibelula->qr_simple_url, 'titular' => '', 'entidad' => 'Libélula']
+                    : null,
+                'libelula_url_pasarela' => $cobroLibelula->url_pasarela_pagos ?? null,
             ],
         ]);
     }
@@ -521,7 +631,15 @@ class VentasController extends Controller
         try {
             switch ($accion) {
                 case 'eliminar':
-                    if ($this->rutas->cancelarBoleto($id)) {
+                    $devuelto = $request->filled('devuelto') ? filter_var($request->input('devuelto'), FILTER_VALIDATE_BOOLEAN) : null;
+                    $ok = $this->rutas->cancelarBoleto(
+                        $id,
+                        $request->user()->id,
+                        $devuelto,
+                        $request->filled('metodo_devolucion') ? $request->input('metodo_devolucion') : null,
+                        $request->filled('motivo') ? $request->input('motivo') : null
+                    );
+                    if ($ok) {
                         return response()->json(['success' => true, 'mensaje' => 'Boleto eliminado correctamente']);
                     }
                     throw new \Exception('Error al eliminar');

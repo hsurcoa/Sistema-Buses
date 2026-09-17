@@ -30,6 +30,7 @@
                     <!-- Form -->
                     <!-- Updated action to point to Series controller -->
                     <form action="<?php echo URLROOT; ?>/series/guardar" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
                         <input type="hidden" name="id" id="id">
                         <div class="row g-4">
                             <div class="col-md-4">

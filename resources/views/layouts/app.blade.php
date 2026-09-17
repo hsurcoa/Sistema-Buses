@@ -6,6 +6,14 @@
     <meta charset="utf-8" />
     <title>{{ SITENAME }}</title>
 
+    <!--begin::Favicon (antes no había ninguno: el navegador mostraba su
+         icono genérico de pestaña sin título/favicon). SVG con el emoji de
+         bus para que se vea nítido en cualquier tamaño, con favicon.ico como
+         respaldo para navegadores que no soportan favicon en SVG.-->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
+    <link rel="shortcut icon" href="{{ URLROOT }}/favicon.ico">
+    <!--end::Favicon-->
+
     <!--begin::Accessibility / Meta-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
     <meta name="color-scheme" content="light" />
@@ -19,6 +27,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!--end::Fonts-->
 
+    <!--begin::Preconnect a los CDN restantes (Bootstrap/Iconos/Fabric/QR/etc.
+         siguen viniendo de afuera). No evita que fallen, pero adelanta la
+         conexión DNS/TLS para que, si responden, tarden menos en aparecer. -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <!--end::Preconnect CDNs restantes-->
+
     <!--begin::Bootstrap 5 (standalone, ya no depende de AdminLTE)-->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" crossorigin="anonymous" />
     <!--end::Bootstrap 5-->
@@ -31,30 +46,40 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <!--begin::Diseño propio del sistema (reemplaza adminlte.css)-->
-    <link rel="stylesheet" href="{{ asset('css/custom.css') }}?v={{ time() }}" />
+    <link rel="stylesheet" href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}" />
     <!--end::Diseño propio-->
 
-    <!--begin::SweetAlert2-->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+    <!--begin::SweetAlert2 (alojado local: ver public/vendor/sweetalert2. Antes
+         venia del CDN de jsdelivr — si esa conexion fallaba o tardaba, TODA
+         la pagina quedaba en blanco, porque nada en el sitio puede mostrar
+         ni un solo dialogo sin esto. Con la copia local, el sitio deja de
+         depender de que un servidor externo este arriba en ese momento.)-->
+    <link rel="stylesheet" href="{{ asset('vendor/sweetalert2/sweetalert2.min.css') }}">
     <!--end::SweetAlert2-->
 
     <!-- QRCode.js (códigos QR en tickets) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-    <!-- jQuery (requerido por plugins y scripts existentes) -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <!-- jQuery (alojado local: ver public/vendor/jquery. Es la libreria de la
+         que depende TODO el JS del sitio -- si el CDN externo fallaba, ni un
+         solo boton funcionaba y la pagina quedaba en blanco.) -->
+    <script src="{{ asset('vendor/jquery/jquery-3.7.1.min.js') }}"></script>
 
     <!-- Fabric.js (diagrama del bus) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js" integrity="sha512-CeIsOAsgJnmevfCi2C7Zsyy6bQKi43utIjdA87Q0ZY84oDqnI0uwfM9+bKiIkI75lUeI00WG/+uJzOmuHlesMA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <!-- BusRenderer -->
-    <script src="{{ asset('js/bus-renderer.js') }}?v={{ time() }}"></script>
+    <script src="{{ asset('js/bus-renderer.js') }}?v={{ filemtime(public_path('js/bus-renderer.js')) }}"></script>
 
     <!-- apexcharts -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.css" integrity="sha256-4MX+61mt9NVvvuPjUWdUdyfZfxSB1/Rf9WtqRHgG5S0=" crossorigin="anonymous" />
 
     <!-- jsvectormap -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsvectormap@1.5.3/dist/css/jsvectormap.min.css" integrity="sha256-+uGLJmmTKOqBr+2E6KDYs/NRsHxSkONXFHUL0fy2O/4=" crossorigin="anonymous" />
+
+    <!-- Flatpickr: reemplaza el input type="date" nativo del navegador (distinto
+         en cada uno, incomodo para años lejanos) en todo el sistema -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css" />
 
     @stack('styles')
 </head>
@@ -194,6 +219,13 @@
                 <nav class="mt-2">
                     <ul class="nav sidebar-menu flex-column" role="navigation" aria-label="Navegación principal" id="navigation">
 
+                        <li class="nav-item">
+                            <a href="{{ URLROOT }}/dashboard" class="nav-link">
+                                <i class="nav-icon bi bi-grid-1x2-fill"></i>
+                                <p>Panel</p>
+                            </a>
+                        </li>
+
                         <li class="nav-header">OPERACIONES DIARIAS</li>
 
                         <li class="nav-item">
@@ -207,8 +239,8 @@
                             <ul class="nav nav-treeview">
                                 <li class="nav-item">
                                     <a href="{{ URLROOT }}/ventas/crear_ruta" class="nav-link">
-                                        <i class="nav-icon bi bi-plus-circle"></i>
-                                        <p>Crear Rutas</p>
+                                        <i class="nav-icon bi bi-ticket-perforated-fill"></i>
+                                        <p>Vender Pasajes</p>
                                     </a>
                                 </li>
                                 <li class="nav-item">
@@ -352,6 +384,12 @@
                                         <p>Reporte de Pasajeros</p>
                                     </a>
                                 </li>
+                                <li class="nav-item">
+                                    <a href="{{ URLROOT }}/reportes/cancelaciones" class="nav-link">
+                                        <i class="nav-icon bi bi-arrow-counterclockwise"></i>
+                                        <p>Bitácora de Cancelaciones</p>
+                                    </a>
+                                </li>
                             </ul>
                         </li>
                         <li class="nav-item">
@@ -388,8 +426,8 @@
     <!--begin::Scripts-->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
-    <!--begin::SweetAlert2 JS-->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!--begin::SweetAlert2 JS (alojado local, ver comentario junto a su CSS más arriba)-->
+    <script src="{{ asset('vendor/sweetalert2/sweetalert2.min.js') }}"></script>
     <!--end::SweetAlert2 JS-->
 
     <!--begin::Sesion expirada (aviso global)-->
@@ -551,6 +589,10 @@
                 if (themeIcon) {
                     themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
                 }
+                // Permite que scripts de la página (ej. gráficos de Chart.js, que
+                // pintan sus colores una sola vez al crearse) se repinten cuando
+                // el usuario cambia de tema sin recargar.
+                document.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
             }
 
             const savedTheme = localStorage.getItem('theme') || 'light';
@@ -567,6 +609,31 @@
         });
     </script>
     <!--end::Dark Mode Toggle-->
+
+    <!--begin::Flatpickr (reemplaza el input type="date" nativo, ver public/css/custom.css)-->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/l10n/es.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof flatpickr === 'undefined') return;
+            flatpickr.localize(flatpickr.l10ns.es);
+
+            // input[type=date] pierde el picker nativo (inconsistente entre
+            // navegadores) y pasa a texto; se mantiene el mismo name/value/
+            // required para no tocar ningun formulario/back-end existente.
+            document.querySelectorAll('input[type="date"]').forEach(function(input) {
+                input.type = 'text';
+                flatpickr(input, {
+                    dateFormat: 'Y-m-d',
+                    altInput: true,
+                    altFormat: 'd/m/Y',
+                    allowInput: true,
+                    disableMobile: true,
+                });
+            });
+        });
+    </script>
+    <!--end::Flatpickr-->
 
     <!--begin::Confirmacion de logout con SweetAlert2-->
     <script>
@@ -588,6 +655,37 @@
         });
     </script>
     <!--end::Confirmacion de logout-->
+
+    <!--begin::Tarjetas con inclinacion 3D (componente global .tool-card, ver public/css/custom.css)-->
+    <script>
+        (function() {
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
+            if (reduceMotion || !hasFinePointer) return;
+
+            document.querySelectorAll('.tool-card').forEach(function(card) {
+                const icon = card.querySelector('.icon');
+
+                card.addEventListener('pointermove', function(event) {
+                    const rect = card.getBoundingClientRect();
+                    const px = (event.clientX - rect.left) / rect.width - 0.5;
+                    const py = (event.clientY - rect.top) / rect.height - 0.5;
+
+                    card.style.transform =
+                        'perspective(900px) rotateX(' + (-py * 9).toFixed(2) + 'deg) rotateY(' + (px * 11).toFixed(2) + 'deg) translateY(-8px)';
+                    card.style.setProperty('--mx', ((px + 0.5) * 100) + '%');
+                    card.style.setProperty('--my', ((py + 0.5) * 100) + '%');
+
+                    if (icon) icon.style.transform = `translate3d(${px * 12}px, ${py * 12}px, 24px) scale(1.14)`;
+                });
+                card.addEventListener('pointerleave', function() {
+                    card.style.transform = '';
+                    if (icon) icon.style.transform = '';
+                });
+            });
+        })();
+    </script>
+    <!--end::Tarjetas con inclinacion 3D-->
 
     @stack('scripts')
     </body>

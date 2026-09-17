@@ -70,6 +70,12 @@ class VehiculosController extends Controller
             }
         }
 
+        foreach (['soat_vencimiento' => 'SOAT', 'itv_vencimiento' => 'ITV'] as $campo => $doc) {
+            if ($datos[$campo] !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $datos[$campo])) {
+                return "La fecha de vencimiento del {$doc} no es válida.";
+            }
+        }
+
         return null;
     }
 
@@ -81,6 +87,10 @@ class VehiculosController extends Controller
             'tarjeta_circulacion' => trim($request->input('tarjeta_circulacion', '')),
             'placa' => trim($request->input('placa', '')),
             'tipo_bus_id' => trim($request->input('tipo_bus_id', '')),
+            'soat_numero' => trim($request->input('soat_numero', '')),
+            'soat_vencimiento' => trim($request->input('soat_vencimiento', '')),
+            'itv_numero' => trim($request->input('itv_numero', '')),
+            'itv_vencimiento' => trim($request->input('itv_vencimiento', '')),
             'clase' => trim($request->input('clase', '')),
             'marca' => trim($request->input('marca', '')),
             'anio' => trim($request->input('anio', '')),

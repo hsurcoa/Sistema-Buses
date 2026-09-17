@@ -6,9 +6,14 @@
  */
 $cobro = $data['cobro'];
 $cfg = $data['config'];
-$qr = $data['qr'];
+$qrFijo = $data['qr_fijo'] ?? null;
+$qrLibelula = $data['qr_libelula'] ?? null;
 $e = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
+$hayDosOpciones = $qrFijo && $qrLibelula;
+// Si hay una sola opción de QR-imagen, esa es "la" opción por defecto. Con
+// las dos disponibles, se arranca en Libélula (confirmación automática).
+$qr = $qrLibelula ?: $qrFijo;
 ?>
 <!doctype html>
 <html lang="es">
@@ -61,6 +66,13 @@ $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
             border-radius: 16px;
             background: #fff;
         }
+        .tabs-qr { display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; }
+        .tabs-qr button {
+            border: 2px solid #e5e7eb; background: #fff; color: var(--suave);
+            font-weight: 700; font-size: 0.9rem; padding: 8px 18px; border-radius: 999px;
+            cursor: pointer; font-family: inherit;
+        }
+        .tabs-qr button.activa { border-color: var(--acento); color: var(--acento); background: #eef2ff; }
         .empresa { font-weight: 700; color: var(--suave); margin: 0 0 8px; }
         h1 { font-size: clamp(1.6rem, 3vw, 2.2rem); margin: 0 0 20px; line-height: 1.15; }
         .monto-label { color: var(--suave); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
@@ -84,23 +96,50 @@ $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
 <body class="<?php echo !$cobro ? 'vencido' : ($cobro->estado === 'vendido' ? 'pagado' : ($cobro->estado !== 'reservado' ? 'vencido' : '')); ?>">
     <main class="tarjeta" aria-live="polite">
         <?php if ($cobro && $qr): ?>
-            <img class="qr pendiente" src="<?php echo $e($qr['imagen']); ?>" alt="Código QR para pagar">
-            <section class="pendiente">
+            <div class="pendiente" style="grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: clamp(24px, 4vw, 48px); align-items: center;">
+                <div>
+                    <?php if ($hayDosOpciones): ?>
+                        <div class="tabs-qr">
+                            <button type="button" id="tabQrLibelula" class="activa" onclick="elegirQr('libelula')">Libélula</button>
+                            <button type="button" id="tabQrFijo" onclick="elegirQr('fijo')">QR Fijo</button>
+                        </div>
+                    <?php endif; ?>
+                    <img class="qr" id="imgQrPantalla" src="<?php echo $e($qr['imagen']); ?>"
+                         data-src-libelula="<?php echo $qrLibelula ? $e($qrLibelula['imagen']) : ''; ?>"
+                         data-src-fijo="<?php echo $qrFijo ? $e($qrFijo['imagen']) : ''; ?>"
+                         alt="Código QR para pagar">
+                </div>
+                <section>
+                    <p class="empresa"><?php echo $e($empresa); ?></p>
+                    <h1>Escanee el código para pagar su pasaje</h1>
+                    <div class="monto-label">Monto a pagar</div>
+                    <div class="monto">Bs. <?php echo number_format((float) $cobro->precio_final, 2); ?></div>
+                    <p class="detalle">
+                        Asiento <strong><?php echo (int) $cobro->numero_asiento; ?></strong><br>
+                        <?php echo $e($cobro->origen); ?> → <?php echo $e($cobro->destino); ?><br>
+                        Tiempo para pagar: <span class="reloj" id="reloj">--:--</span>
+                    </p>
+                    <p class="instrucciones" id="leyendaQrPantalla"
+                       data-leyenda-libelula="<?php echo $qrLibelula ? $e(trim($qrLibelula['titular'] . ($qrLibelula['entidad'] ? ' · ' . $qrLibelula['entidad'] : ''), ' ·')) : ''; ?>"
+                       data-leyenda-fija="<?php echo $qrFijo ? $e(trim($qrFijo['titular'] . ($qrFijo['entidad'] ? ' · ' . $qrFijo['entidad'] : ''), ' ·')) : ''; ?>">
+                        <?php if ($qr['titular'] || $qr['entidad']): ?>Beneficiario: <?php echo $e(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?><?php endif; ?>
+                    </p>
+                    <?php if (!empty($cfg['pago_qr_instrucciones'])): ?>
+                        <p class="instrucciones"><?php echo $e($cfg['pago_qr_instrucciones']); ?></p>
+                    <?php endif; ?>
+                </section>
+            </div>
+        <?php elseif ($cobro && !empty($data['libelula_url_pasarela'])): ?>
+            <section class="pendiente" style="grid-column: 1 / -1; text-align: center;">
                 <p class="empresa"><?php echo $e($empresa); ?></p>
-                <h1>Escanee el código para pagar su pasaje</h1>
+                <h1>Complete su pago en la pasarela de Libélula</h1>
                 <div class="monto-label">Monto a pagar</div>
                 <div class="monto">Bs. <?php echo number_format((float) $cobro->precio_final, 2); ?></div>
-                <p class="detalle">
-                    Asiento <strong><?php echo (int) $cobro->numero_asiento; ?></strong><br>
-                    <?php echo $e($cobro->origen); ?> → <?php echo $e($cobro->destino); ?><br>
-                    Tiempo para pagar: <span class="reloj" id="reloj">--:--</span>
-                </p>
-                <?php if ($qr['titular'] || $qr['entidad']): ?>
-                    <p class="instrucciones">Beneficiario: <?php echo $e(trim($qr['titular'] . ($qr['entidad'] ? ' · ' . $qr['entidad'] : ''), ' ·')); ?></p>
-                <?php endif; ?>
-                <?php if (!empty($cfg['pago_qr_instrucciones'])): ?>
-                    <p class="instrucciones"><?php echo $e($cfg['pago_qr_instrucciones']); ?></p>
-                <?php endif; ?>
+                <p class="detalle">Tiempo para pagar: <span class="reloj" id="reloj">--:--</span></p>
+                <a href="<?php echo $e($data['libelula_url_pasarela']); ?>" target="_blank" rel="noopener"
+                   style="display:inline-block; margin-top:12px; padding:14px 28px; background:var(--acento); color:#fff; border-radius:12px; font-weight:700; text-decoration:none;">
+                    Abrir pasarela de pago
+                </a>
             </section>
         <?php endif; ?>
 
@@ -117,6 +156,29 @@ $empresa = $cfg['empresa_nombre'] ?? 'Venta de pasajes';
     </main>
 
     <script>
+        function elegirQr(opcion) {
+            const img = document.getElementById('imgQrPantalla');
+            const leyenda = document.getElementById('leyendaQrPantalla');
+            if (!img) return;
+
+            const esLibelula = opcion === 'libelula';
+            const src = esLibelula ? img.dataset.srcLibelula : img.dataset.srcFijo;
+            if (!src) return;
+            img.src = src;
+
+            if (leyenda) {
+                const texto = esLibelula ? leyenda.dataset.leyendaLibelula : leyenda.dataset.leyendaFija;
+                leyenda.textContent = texto ? ('Beneficiario: ' + texto) : '';
+            }
+
+            const tabLibelula = document.getElementById('tabQrLibelula');
+            const tabFijo = document.getElementById('tabQrFijo');
+            if (tabLibelula && tabFijo) {
+                tabLibelula.classList.toggle('activa', esLibelula);
+                tabFijo.classList.toggle('activa', !esLibelula);
+            }
+        }
+
         (function() {
             const URL_ESTADO = '<?php echo URLROOT; ?>/ventas/estado_cobro/<?php echo (int) ($cobro->id ?? 0); ?>';
             let segundos = <?php echo (int) ($cobro->segundos_restantes ?? 0); ?>;

@@ -101,7 +101,8 @@ class BusRenderer {
 
         const perFloor = floorsToShow.map(floor => {
             const numbers = this.calculateSeatsForFloor(layout.totalSeats, layout.floors, floor, layout.config);
-            return { floor, numbers, rows: Math.ceil(numbers.length / layout.columns) };
+            const rows = layout.rowSeats ? layout.rowSeats.length : Math.ceil(numbers.length / layout.columns);
+            return { floor, numbers, rows };
         });
 
         let seatSize = this.fitSeatSize(layout, perFloor, opts.maxHeight);
@@ -164,13 +165,31 @@ class BusRenderer {
 
     parseLayout(data) {
         const config = data.layout_config || {};
-        const columns = Math.max(1, parseInt(config.columnas || 4));
+        const totalSeats = parseInt(data.asientos_total || data.capacidad || 40);
+        const floors = Math.max(1, parseInt(config.pisos || data.pisos || 1));
+        let baseColumns = Math.max(1, parseInt(config.columnas || 4));
+
+        // `filas`: cantidad de asientos por fila (p. ej. [1,3,3,3,4] en una van
+        // real: fila delantera chica junto al chofer, bancas de 3 al medio,
+        // banca ancha atras) en vez de asumir la misma cantidad en cada fila
+        // (lo que antes obligaba a dibujar 2+2 parejo hasta en un minibus).
+        // Solo aplica a un piso: en dos pisos cada piso sigue la grilla uniforme.
+        let rowSeats = null;
+        if (Array.isArray(config.filas) && floors === 1) {
+            const filas = config.filas.map(n => Math.max(0, parseInt(n) || 0));
+            if (filas.reduce((a, b) => a + b, 0) === totalSeats) {
+                rowSeats = filas;
+                baseColumns = Math.max(baseColumns, ...filas);
+            }
+        }
+
         return {
             config,
-            totalSeats: parseInt(data.asientos_total || data.capacidad || 40),
-            floors: Math.max(1, parseInt(config.pisos || data.pisos || 1)),
-            columns,
-            aisle: Math.min(Math.max(0, parseInt(config.posicion_pasillo ?? 2)), columns),
+            totalSeats,
+            floors,
+            columns: baseColumns,
+            aisle: Math.min(Math.max(0, parseInt(config.posicion_pasillo ?? 2)), baseColumns),
+            rowSeats,
         };
     }
 
@@ -240,25 +259,38 @@ class BusRenderer {
             grid.appendChild(aisleLine);
         }
 
-        f.numbers.forEach((num, index) => {
-            const col = index % columns;
-            const row = Math.floor(index / columns);
-            // +1 por la columna del numero de fila, +1 extra si ya paso el pasillo
-            const gridCol = col + 2 + (right && col >= aisle ? 1 : 0);
+        // Sin `filas` explicitas: misma cantidad de asientos en cada fila (bus
+        // grande, todas las filas iguales). Con `filas`: cada una puede tener
+        // menos asientos que el ancho maximo (p. ej. fila delantera de 1 junto
+        // al chofer, banca trasera de 4) y se alinean contra la ventana
+        // (derecha), dejando el espacio libre del lado del pasillo/puerta.
+        let numIndex = 0;
+        for (let row = 0; row < f.rows; row++) {
+            const seatsInRow = layout.rowSeats ? layout.rowSeats[row] : columns;
+            const emptySlots = columns - seatsInRow;
 
-            const o = occupied.find(x => parseInt(x.numero) === num);
-            let status = 'libre';
-            if (o) {
-                status = (o.estado === 'vendido' || o.estado === '1') ? 'vendido' : 'reservado';
+            for (let slot = 0; slot < seatsInRow; slot++) {
+                const num = f.numbers[numIndex++];
+                if (num === undefined) {
+                    continue;
+                }
+                const col = emptySlots + slot;
+                // +1 por la columna del numero de fila, +1 extra si ya paso el pasillo
+                const gridCol = col + 2 + (right && col >= aisle ? 1 : 0);
+
+                const o = occupied.find(x => parseInt(x.numero) === num);
+                let status = 'libre';
+                if (o) {
+                    status = (o.estado === 'vendido' || o.estado === '1') ? 'vendido' : 'reservado';
+                }
+
+                const seat = this.createSeat(num, status, o || null);
+                seat.el.style.gridRow = row + 1;
+                seat.el.style.gridColumn = gridCol;
+                grid.appendChild(seat.el);
+                this.seats.push(seat);
             }
-
-            const seat = this.createSeat(num, status, o || null);
-            seat.el.style.gridRow = row + 1;
-            seat.el.style.gridColumn = gridCol;
-            grid.appendChild(seat.el);
-            this.seats.push(seat);
-        });
-
+        }
         body.appendChild(grid);
 
         if (f.floor === 1) {
@@ -338,9 +370,14 @@ class BusRenderer {
         if (interactive) {
             el.type = 'button';
             if (status === 'vendido') {
+                // disabled de verdad (no solo aria-disabled): sin esto el boton
+                // seguia siendo enfocable por teclado y mostraba el aro de foco
+                // de seleccion aunque el clic ya estaba bloqueado en clickAsiento().
+                el.disabled = true;
                 el.setAttribute('aria-disabled', 'true');
+            } else {
+                el.addEventListener('click', () => this.onSeatClick(seat));
             }
-            el.addEventListener('click', () => this.onSeatClick(seat));
         }
 
         return seat;

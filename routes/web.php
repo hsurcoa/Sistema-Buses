@@ -10,6 +10,7 @@ use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\ControladorTransaccionesController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EncomiendasController;
+use App\Http\Controllers\LibelulaWebhookController;
 use App\Http\Controllers\ReportesController;
 use App\Http\Controllers\SeriesController;
 use App\Http\Controllers\VehiculosController;
@@ -43,6 +44,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/ventas/obtener_manifiesto/{id}', [VentasController::class, 'obtenerManifiesto'])->name('ventas.obtener_manifiesto');
         Route::get('/ventas/listar_manifiesto/{id}', [VentasController::class, 'listarManifiesto'])->name('ventas.listar_manifiesto');
         Route::post('/ventas/cancelar_boleto/{id}', [VentasController::class, 'cancelarBoleto'])->name('ventas.cancelar_boleto');
+        Route::get('/ventas/estado_cancelacion/{id}', [VentasController::class, 'estadoCancelacion'])->name('ventas.estado_cancelacion');
         Route::get('/ventas/imprimir_manifiesto/{id}', [VentasController::class, 'imprimirManifiesto'])->name('ventas.imprimir_manifiesto');
         Route::get('/ventas/imprimir_manifiesto_html/{id}', [VentasController::class, 'imprimirManifiestoHtml'])->name('ventas.imprimir_manifiesto_html');
         Route::get('/ventas/estado_cobro/{id}', [VentasController::class, 'estadoCobro'])->name('ventas.estado_cobro');
@@ -63,6 +65,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/caja/cerrar', [CajaController::class, 'cerrar'])->name('caja.cerrar');
         Route::post('/caja/registrar_gasto_ajax', [CajaController::class, 'registrarGastoAjax'])->name('caja.registrar_gasto_ajax');
         Route::post('/caja/obtener_ingresos_ajax', [CajaController::class, 'obtenerIngresosAjax'])->name('caja.obtener_ingresos_ajax');
+        Route::post('/caja/obtener_movimientos_sesion_ajax', [CajaController::class, 'obtenerMovimientosSesionAjax'])->name('caja.obtener_movimientos_sesion_ajax');
         Route::get('/caja/reporte/{id}', [CajaController::class, 'reporte'])->name('caja.reporte');
         Route::get('/caja/reporte_z/{id}', [CajaController::class, 'reporteZ'])->name('caja.reporte_z');
         Route::post('/caja/obtener_reportes_cierre_ajax', [CajaController::class, 'obtenerReportesCierreAjax'])->name('caja.obtener_reportes_cierre_ajax');
@@ -135,7 +138,10 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
         Route::post('/configuracion/guardar_qr', [ConfiguracionController::class, 'guardarQr'])->name('configuracion.guardar_qr');
+        Route::post('/configuracion/guardar_alertas_flota', [ConfiguracionController::class, 'guardarAlertasFlota'])->name('configuracion.guardar_alertas_flota');
         Route::post('/configuracion/guardar', [ConfiguracionController::class, 'guardar'])->name('configuracion.guardar');
+        Route::post('/configuracion/guardar_libelula', [ConfiguracionController::class, 'guardarLibelula'])->name('configuracion.guardar_libelula');
+        Route::post('/configuracion/verificar_pagos_libelula', [ConfiguracionController::class, 'verificarPagosLibelula'])->name('configuracion.verificar_pagos_libelula');
 
         // Fase 6 (Encomiendas): ver
         // docs/superpowers/plans/2026-09-17-migracion-laravel-fase6-plan.md.
@@ -156,6 +162,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/reportes/imprimir_manifiesto/{viaje_id}', [ReportesController::class, 'imprimirManifiesto'])->name('reportes.imprimir_manifiesto');
         Route::get('/reportes/financiero', [ReportesController::class, 'financiero'])->name('reportes.financiero');
         Route::post('/reportes/financiero_ajax', [ReportesController::class, 'financieroAjax'])->name('reportes.financiero_ajax');
+        Route::get('/reportes/cancelaciones', [ReportesController::class, 'cancelaciones'])->name('reportes.cancelaciones');
+        Route::post('/reportes/cancelaciones_ajax', [ReportesController::class, 'cancelacionesAjax'])->name('reportes.cancelaciones_ajax');
+        Route::post('/reportes/procesar_devolucion', [ReportesController::class, 'procesarDevolucionAjax'])->name('reportes.procesar_devolucion');
 
         // Fase 8 (Backup, ultima del roadmap original): ver
         // docs/superpowers/plans/2026-09-17-migracion-laravel-fase8-plan.md.
@@ -165,4 +174,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/backup/generate', [BackupController::class, 'generate'])->name('backup.generate');
     });
 });
+
+// Callback público de Libélula: lo invocan sus servidores (sin sesión ni
+// CSRF nuestro) cuando un pago se confirma. Ver LibelulaWebhookController.
+Route::any('/pagos/libelula/callback', [LibelulaWebhookController::class, 'confirmar'])->name('pagos.libelula.callback');
 

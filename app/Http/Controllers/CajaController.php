@@ -136,6 +136,23 @@ class CajaController extends Controller
         }
     }
 
+    /** Movimientos de la sesión abierta del usuario, con la vía de pago resuelta (Efectivo/QR fijo/Libélula), para la tabla en vivo del dashboard. */
+    public function obtenerMovimientosSesionAjax(Request $request)
+    {
+        $cajaAbierta = $this->caja->verificarCajaAbierta($request->user()->id);
+        if (! $cajaAbierta) {
+            return response()->json(['status' => 'error', 'message' => 'No hay una caja abierta.']);
+        }
+
+        $tipo = in_array($request->input('tipo'), ['INGRESO', 'EGRESO'], true) ? $request->input('tipo') : null;
+        $via = in_array($request->input('via'), ['EFECTIVO', 'QR_FIJO', 'LIBELULA'], true) ? $request->input('via') : null;
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->caja->obtenerMovimientosSesion($cajaAbierta->id, $tipo, $via),
+        ]);
+    }
+
     public function obtenerIngresosAjax(Request $request)
     {
         [$fechaInicio, $fechaFin] = $this->rangoFechas($request);
@@ -210,15 +227,15 @@ class CajaController extends Controller
         $stats = $this->caja->obtenerEstadisticasPeriodo($fechaInicio, $fechaFin, $filtro);
 
         $sheet->setCellValue('A1', 'REPORTE DE CIERRES DE CAJA');
-        $sheet->mergeCells('A1:J1');
+        $sheet->mergeCells('A1:L1');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
 
         $sheet->setCellValue('A2', 'Período: '.$fechaInicio.' al '.$fechaFin);
-        $sheet->mergeCells('A2:J2');
+        $sheet->mergeCells('A2:L2');
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
 
-        $headers = ['Turno', 'Cajero', 'Apertura', 'Cierre', 'Inicial', 'Ingresos', 'Egresos', 'Sistema', 'Real', 'Diferencia'];
+        $headers = ['Turno', 'Cajero', 'Apertura', 'Cierre', 'Inicial', 'Efectivo', 'QR Fijo', 'Libélula', 'Egresos', 'Sistema', 'Real', 'Diferencia'];
         $col = 'A';
         foreach ($headers as $header) {
             $sheet->setCellValue($col.'4', $header);
@@ -237,11 +254,13 @@ class CajaController extends Controller
             $sheet->setCellValue('C'.$row, date('d/m/Y H:i', strtotime($sesion->fecha_apertura)));
             $sheet->setCellValue('D'.$row, date('d/m/Y H:i', strtotime($sesion->fecha_cierre)));
             $sheet->setCellValue('E'.$row, number_format($sesion->monto_inicial, 2));
-            $sheet->setCellValue('F'.$row, number_format($sesion->total_ingresos, 2));
-            $sheet->setCellValue('G'.$row, number_format($sesion->total_egresos, 2));
-            $sheet->setCellValue('H'.$row, number_format($sesion->monto_final_sistema, 2));
-            $sheet->setCellValue('I'.$row, number_format($sesion->monto_final_real, 2));
-            $sheet->setCellValue('J'.$row, number_format($sesion->diferencia, 2));
+            $sheet->setCellValue('F'.$row, number_format($sesion->total_efectivo, 2));
+            $sheet->setCellValue('G'.$row, number_format($sesion->total_qr_fijo, 2));
+            $sheet->setCellValue('H'.$row, number_format($sesion->total_qr_libelula, 2));
+            $sheet->setCellValue('I'.$row, number_format($sesion->total_egresos, 2));
+            $sheet->setCellValue('J'.$row, number_format($sesion->monto_final_sistema, 2));
+            $sheet->setCellValue('K'.$row, number_format($sesion->monto_final_real, 2));
+            $sheet->setCellValue('L'.$row, number_format($sesion->diferencia, 2));
             $row++;
         }
 
@@ -250,11 +269,14 @@ class CajaController extends Controller
         $sheet->getStyle('A'.$row)->getFont()->setBold(true);
         $sheet->setCellValue('B'.$row, $stats->total_sesiones.' sesiones');
         $sheet->setCellValue('E'.$row, number_format($stats->suma_inicial, 2));
-        $sheet->setCellValue('H'.$row, number_format($stats->suma_sistema, 2));
-        $sheet->setCellValue('I'.$row, number_format($stats->suma_real, 2));
-        $sheet->setCellValue('J'.$row, number_format($stats->suma_diferencias, 2));
+        $sheet->setCellValue('F'.$row, number_format($stats->suma_efectivo, 2));
+        $sheet->setCellValue('G'.$row, number_format($stats->suma_qr_fijo, 2));
+        $sheet->setCellValue('H'.$row, number_format($stats->suma_qr_libelula, 2));
+        $sheet->setCellValue('J'.$row, number_format($stats->suma_sistema, 2));
+        $sheet->setCellValue('K'.$row, number_format($stats->suma_real, 2));
+        $sheet->setCellValue('L'.$row, number_format($stats->suma_diferencias, 2));
 
-        foreach (range('A', 'J') as $col) {
+        foreach (range('A', 'L') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -289,28 +311,37 @@ class CajaController extends Controller
         $table = $section->addTable(['borderSize' => 6, 'borderColor' => '999999', 'cellMargin' => 80]);
 
         $table->addRow(500);
-        $table->addCell(1000)->addText('Turno', ['bold' => true]);
-        $table->addCell(3000)->addText('Cajero', ['bold' => true]);
-        $table->addCell(2000)->addText('Apertura', ['bold' => true]);
-        $table->addCell(2000)->addText('Cierre', ['bold' => true]);
-        $table->addCell(1500)->addText('Sistema', ['bold' => true]);
-        $table->addCell(1500)->addText('Real', ['bold' => true]);
-        $table->addCell(1500)->addText('Diferencia', ['bold' => true]);
+        $table->addCell(900)->addText('Turno', ['bold' => true]);
+        $table->addCell(2200)->addText('Cajero', ['bold' => true]);
+        $table->addCell(1600)->addText('Apertura', ['bold' => true]);
+        $table->addCell(1600)->addText('Cierre', ['bold' => true]);
+        $table->addCell(1300)->addText('Efectivo', ['bold' => true]);
+        $table->addCell(1300)->addText('QR Fijo', ['bold' => true]);
+        $table->addCell(1300)->addText('Libélula', ['bold' => true]);
+        $table->addCell(1300)->addText('Sistema', ['bold' => true]);
+        $table->addCell(1300)->addText('Real', ['bold' => true]);
+        $table->addCell(1300)->addText('Diferencia', ['bold' => true]);
 
         foreach ($sesiones as $sesion) {
             $table->addRow();
-            $table->addCell(1000)->addText('#'.$sesion->id);
-            $table->addCell(3000)->addText($sesion->cajero_nombre);
-            $table->addCell(2000)->addText(date('d/m/Y H:i', strtotime($sesion->fecha_apertura)));
-            $table->addCell(2000)->addText(date('d/m/Y H:i', strtotime($sesion->fecha_cierre)));
-            $table->addCell(1500)->addText('Bs. '.number_format($sesion->monto_final_sistema, 2));
-            $table->addCell(1500)->addText('Bs. '.number_format($sesion->monto_final_real, 2));
-            $table->addCell(1500)->addText('Bs. '.number_format($sesion->diferencia, 2));
+            $table->addCell(900)->addText('#'.$sesion->id);
+            $table->addCell(2200)->addText($sesion->cajero_nombre);
+            $table->addCell(1600)->addText(date('d/m/Y H:i', strtotime($sesion->fecha_apertura)));
+            $table->addCell(1600)->addText(date('d/m/Y H:i', strtotime($sesion->fecha_cierre)));
+            $table->addCell(1300)->addText('Bs. '.number_format($sesion->total_efectivo, 2));
+            $table->addCell(1300)->addText('Bs. '.number_format($sesion->total_qr_fijo, 2));
+            $table->addCell(1300)->addText('Bs. '.number_format($sesion->total_qr_libelula, 2));
+            $table->addCell(1300)->addText('Bs. '.number_format($sesion->monto_final_sistema, 2));
+            $table->addCell(1300)->addText('Bs. '.number_format($sesion->monto_final_real, 2));
+            $table->addCell(1300)->addText('Bs. '.number_format($sesion->diferencia, 2));
         }
 
         $section->addTextBreak(2);
         $section->addText('RESUMEN CONSOLIDADO', ['bold' => true, 'size' => 14]);
         $section->addText('Total de sesiones: '.$stats->total_sesiones);
+        $section->addText('Total efectivo: Bs. '.number_format($stats->suma_efectivo, 2));
+        $section->addText('Total QR fijo: Bs. '.number_format($stats->suma_qr_fijo, 2));
+        $section->addText('Total Libélula: Bs. '.number_format($stats->suma_qr_libelula, 2));
         $section->addText('Total sistema: Bs. '.number_format($stats->suma_sistema, 2));
         $section->addText('Total real: Bs. '.number_format($stats->suma_real, 2));
         $section->addText('Diferencia total: Bs. '.number_format($stats->suma_diferencias, 2));
@@ -357,7 +388,8 @@ class CajaController extends Controller
 
         $html .= '<table><thead><tr>
             <th>Turno</th><th>Cajero</th><th>Apertura</th><th>Cierre</th>
-            <th class="text-right">Inicial</th><th class="text-right">Ingresos</th>
+            <th class="text-right">Inicial</th><th class="text-right">Efectivo</th>
+            <th class="text-right">QR Fijo</th><th class="text-right">Libélula</th>
             <th class="text-right">Egresos</th><th class="text-right">Sistema</th>
             <th class="text-right">Real</th><th class="text-right">Diferencia</th>
         </tr></thead><tbody>';
@@ -369,7 +401,9 @@ class CajaController extends Controller
                 <td>'.date('d/m/Y H:i', strtotime($sesion->fecha_apertura)).'</td>
                 <td>'.date('d/m/Y H:i', strtotime($sesion->fecha_cierre)).'</td>
                 <td class="text-right">Bs. '.number_format($sesion->monto_inicial, 2).'</td>
-                <td class="text-right">Bs. '.number_format($sesion->total_ingresos, 2).'</td>
+                <td class="text-right">Bs. '.number_format($sesion->total_efectivo, 2).'</td>
+                <td class="text-right">Bs. '.number_format($sesion->total_qr_fijo, 2).'</td>
+                <td class="text-right">Bs. '.number_format($sesion->total_qr_libelula, 2).'</td>
                 <td class="text-right">Bs. '.number_format($sesion->total_egresos, 2).'</td>
                 <td class="text-right">Bs. '.number_format($sesion->monto_final_sistema, 2).'</td>
                 <td class="text-right">Bs. '.number_format($sesion->monto_final_real, 2).'</td>
@@ -380,7 +414,10 @@ class CajaController extends Controller
         $html .= '<tr class="totals">
             <td colspan="4">TOTALES ('.$stats->total_sesiones.' sesiones)</td>
             <td class="text-right">Bs. '.number_format($stats->suma_inicial, 2).'</td>
-            <td colspan="2"></td>
+            <td class="text-right">Bs. '.number_format($stats->suma_efectivo, 2).'</td>
+            <td class="text-right">Bs. '.number_format($stats->suma_qr_fijo, 2).'</td>
+            <td class="text-right">Bs. '.number_format($stats->suma_qr_libelula, 2).'</td>
+            <td></td>
             <td class="text-right">Bs. '.number_format($stats->suma_sistema, 2).'</td>
             <td class="text-right">Bs. '.number_format($stats->suma_real, 2).'</td>
             <td class="text-right">Bs. '.number_format($stats->suma_diferencias, 2).'</td>

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Boleto;
 use App\Models\Cliente;
+use App\Models\LibelulaCobro;
 use App\Models\Personal;
 use App\Models\Ruta;
 use App\Models\Vehiculo;
@@ -26,7 +27,7 @@ use Illuminate\Support\Facades\Log;
  */
 class RutaService
 {
-    public function __construct(private TramoService $tramos) {}
+    public function __construct(private TramoService $tramos, private LibelulaService $libelula) {}
 
     public function listarRutas(int $limit = 100, int $offset = 0)
     {
@@ -586,9 +587,146 @@ class RutaService
         }
     }
 
-    public function cancelarBoleto(int $id): bool
+    /**
+     * Cancela un boleto. Si esta "reservado" (nunca se cobro) se borra sin
+     * mas: no hay plata de por medio. Si ya estaba "vendido", NO se borra
+     * (quedaria el ingreso en movimientos_caja sin ningun boleto que lo
+     * explique, un dinero fantasma en el cierre de caja) -- se marca
+     * "cancelado" (libera el asiento igual que un delete, pero deja rastro).
+     *
+     * Antes esto revertia el ingreso como egreso automaticamente, sin
+     * preguntar si el pasajero realmente recibio la plata de vuelta, y lo
+     * hacia contra la sesion de caja ORIGINAL de la venta (que puede estar
+     * cerrada hace dias -- un egreso ahi corrompe un cierre ya reportado).
+     * Ahora: el egreso solo se genera si $devuelto es true, va contra la
+     * caja ABIERTA de quien cancela, y SIEMPRE queda un registro en
+     * cancelaciones_boletos (haya habido devolucion o no) para que sea
+     * trazable. Un cobro QR nunca conto como efectivo en caja, asi que una
+     * devolucion sobre un pago QR no genera movimiento de caja.
+     *
+     * @throws \Exception si hay que devolver en efectivo y el usuario no tiene caja abierta.
+     */
+    public function cancelarBoleto(int $id, int $usuarioId, ?bool $devuelto = null, ?string $metodoDevolucion = null, ?string $motivo = null): bool
     {
-        return (bool) Boleto::where('id', $id)->delete();
+        return DB::transaction(function () use ($id, $usuarioId, $devuelto, $metodoDevolucion, $motivo) {
+            $boleto = DB::table('boletos')->where('id', $id)->lockForUpdate()
+                ->select('id', 'estado', 'sesion_caja_id', 'precio_final', 'metodo_pago', 'codigo_boleto', 'numero_asiento')
+                ->first();
+
+            if (! $boleto) {
+                return false;
+            }
+
+            if ($boleto->estado !== 'vendido') {
+                return (bool) Boleto::where('id', $id)->delete();
+            }
+
+            Boleto::where('id', $id)->update(['estado' => 'cancelado']);
+
+            $devuelto = $devuelto === true;
+            $sesionCajaId = null;
+
+            if ($devuelto && $boleto->metodo_pago !== 'QR') {
+                $caja = DB::table('cajas_sesiones')->where('usuario_id', $usuarioId)->where('estado', 'ABIERTA')->first();
+                if (! $caja) {
+                    throw new \Exception('Debe tener una caja abierta para procesar la devolución en efectivo.');
+                }
+
+                DB::table('movimientos_caja')->insert([
+                    'sesion_id' => $caja->id,
+                    'tipo_movimiento' => 'EGRESO',
+                    'origen_modulo' => 'PASAJE',
+                    'referencia_id' => $id,
+                    'monto' => $boleto->precio_final,
+                    'descripcion' => "Devolución Boleto #{$boleto->codigo_boleto} (asiento {$boleto->numero_asiento})",
+                    'fecha_creacion' => now(),
+                ]);
+                $sesionCajaId = $caja->id;
+            }
+
+            DB::table('cancelaciones_boletos')->insert([
+                'boleto_id' => $id,
+                'usuario_id' => $usuarioId,
+                'sesion_caja_id' => $sesionCajaId,
+                'monto' => $boleto->precio_final,
+                'devuelto' => $devuelto,
+                'metodo_devolucion' => $devuelto ? ($metodoDevolucion ?: $boleto->metodo_pago) : null,
+                'motivo' => $motivo,
+                'usuario_devolucion_id' => $devuelto ? $usuarioId : null,
+                'fecha_devolucion' => $devuelto ? now() : null,
+                'fecha_creacion' => now(),
+            ]);
+
+            return true;
+        });
+    }
+
+    /** Datos que el frontend necesita para saber si hay que preguntar por la devolución antes de cancelar. */
+    public function infoParaCancelar(int $id): ?object
+    {
+        $boleto = DB::table('boletos')->where('id', $id)->select('estado', 'precio_final', 'metodo_pago')->first();
+        if (! $boleto) {
+            return null;
+        }
+
+        return (object) [
+            'requiere_devolucion' => $boleto->estado === 'vendido',
+            'monto' => $boleto->precio_final,
+            'metodo_pago' => $boleto->metodo_pago,
+        ];
+    }
+
+    /**
+     * Procesa la devolución de un boleto que se canceló antes SIN devolver
+     * la plata (el pasajero vuelve despues a reclamarla). Genera el egreso
+     * en la caja abierta de quien la procesa recien en este momento.
+     *
+     * @throws \Exception si el registro no existe, ya tiene devolución, o falta caja abierta para efectivo.
+     */
+    public function procesarDevolucionPendiente(int $cancelacionId, int $usuarioId, string $metodoDevolucion): bool
+    {
+        return DB::transaction(function () use ($cancelacionId, $usuarioId, $metodoDevolucion) {
+            $cancelacion = DB::table('cancelaciones_boletos')->where('id', $cancelacionId)->lockForUpdate()->first();
+
+            if (! $cancelacion) {
+                throw new \Exception('No se encontró el registro de cancelación.');
+            }
+            if ($cancelacion->devuelto) {
+                throw new \Exception('Esta cancelación ya tiene una devolución registrada.');
+            }
+
+            $sesionCajaId = null;
+
+            if ($metodoDevolucion === 'EFECTIVO') {
+                $caja = DB::table('cajas_sesiones')->where('usuario_id', $usuarioId)->where('estado', 'ABIERTA')->first();
+                if (! $caja) {
+                    throw new \Exception('Debe tener una caja abierta para procesar la devolución en efectivo.');
+                }
+
+                $boleto = DB::table('boletos')->where('id', $cancelacion->boleto_id)->select('codigo_boleto', 'numero_asiento')->first();
+
+                DB::table('movimientos_caja')->insert([
+                    'sesion_id' => $caja->id,
+                    'tipo_movimiento' => 'EGRESO',
+                    'origen_modulo' => 'PASAJE',
+                    'referencia_id' => $cancelacion->boleto_id,
+                    'monto' => $cancelacion->monto,
+                    'descripcion' => 'Devolución Boleto #'.($boleto->codigo_boleto ?? $cancelacion->boleto_id).' (reclamada tras la cancelación)',
+                    'fecha_creacion' => now(),
+                ]);
+                $sesionCajaId = $caja->id;
+            }
+
+            DB::table('cancelaciones_boletos')->where('id', $cancelacionId)->update([
+                'devuelto' => true,
+                'metodo_devolucion' => $metodoDevolucion,
+                'sesion_caja_id' => $sesionCajaId,
+                'usuario_devolucion_id' => $usuarioId,
+                'fecha_devolucion' => now(),
+            ]);
+
+            return true;
+        });
     }
 
     public function obtenerTicketPorId(int $id): ?object
@@ -658,6 +796,85 @@ class RutaService
         });
 
         return $this->obtenerDatosTicket($boletoId);
+    }
+
+    /**
+     * Confirma un boleto pagado vía la pasarela Libélula (llamado desde el
+     * callback público o desde la conciliación manual). A diferencia de
+     * confirmarPagoBoleto(), acá no hay un cajero interactivo esperando: el
+     * pago pudo confirmarse minutos u horas despues, cuando quien vendio el
+     * boleto ya cerró su caja. En ese caso el pago SI quedo confirmado (no
+     * se pierde ni se vuelve a cobrar), pero el ingreso no puede asentarse
+     * en ninguna caja hasta que alguien la abra: aplicado_caja=false deja
+     * eso trazable para conciliar despues.
+     *
+     * @return array{pago_confirmado: bool, aplicado_caja: bool, mensaje: string}
+     */
+    public function confirmarPagoLibelula(int $boletoId, string $referenciaTransaccion): array
+    {
+        $boleto = DB::table('boletos')->where('id', $boletoId)->first();
+        if (! $boleto) {
+            return ['pago_confirmado' => false, 'aplicado_caja' => false, 'mensaje' => 'Boleto no encontrado.'];
+        }
+        if ($boleto->estado === 'vendido') {
+            return ['pago_confirmado' => true, 'aplicado_caja' => true, 'mensaje' => 'El boleto ya estaba confirmado.'];
+        }
+
+        try {
+            $this->confirmarPagoBoleto($boletoId, (int) $boleto->usuario_vendedor_id, 'QR', $referenciaTransaccion);
+
+            return ['pago_confirmado' => true, 'aplicado_caja' => true, 'mensaje' => 'Pago confirmado y aplicado a caja.'];
+        } catch (\Exception $e) {
+            return ['pago_confirmado' => false, 'aplicado_caja' => false, 'mensaje' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Sustituto activo del webhook de Libélula: en vez de esperar a que
+     * Libélula avise (necesita una URL pública que un XAMPP local no tiene),
+     * pregunta directamente si la deuda de este boleto ya se pagó y, si es
+     * así, la confirma y aplica a caja en el momento. Pensado para llamarse
+     * desde el polling que ya existe cada pocos segundos en el modal de
+     * cobro y en la pantalla del pasajero — así el cajero se entera solo,
+     * sin tener que apretar "Verificar pagos" a mano.
+     *
+     * El modal del cajero sondea cada 5s y la pantalla del pasajero cada 3s
+     * (a veces las dos a la vez, para el mismo boleto): golpear la API de
+     * Libélula a ese ritmo no tiene sentido. Se limita a como maximo una
+     * consulta real cada 8 segundos por boleto; el resto de los sondeos en
+     * el medio simplemente no verifican nada nuevo (el siguiente si lo hace).
+     *
+     * @return bool true si el pago se acaba de confirmar en esta llamada.
+     */
+    public function intentarConfirmarLibelula(int $boletoId): bool
+    {
+        $cobro = LibelulaCobro::where('boleto_id', $boletoId)->where('estado', 'pendiente')->first();
+        if (! $cobro) {
+            return false;
+        }
+
+        if (! \Illuminate\Support\Facades\Cache::add("libelula_check_boleto_{$boletoId}", true, 8)) {
+            return false;
+        }
+
+        $resultado = $this->libelula->consultarPagos($cobro->fecha_creacion, now()->format('Y-m-d H:i:s'));
+        if (! $resultado['ok']) {
+            return false;
+        }
+
+        $pago = collect($resultado['pagos'])->firstWhere('identificador', $cobro->identificador_deuda);
+        if (! $pago) {
+            return false;
+        }
+
+        $confirmacion = $this->confirmarPagoLibelula($boletoId, $pago['id_transaccion'] ?? $cobro->identificador_deuda);
+
+        $cobro->update([
+            'estado' => $confirmacion['aplicado_caja'] ? 'pagado' : 'pagado_sin_aplicar',
+            'fecha_pago' => now(),
+        ]);
+
+        return $confirmacion['pago_confirmado'];
     }
 
     /** Cancela un cobro QR pendiente y libera el asiento. */

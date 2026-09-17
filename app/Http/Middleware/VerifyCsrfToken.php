@@ -20,6 +20,14 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken as Middleware;
  */
 class VerifyCsrfToken extends Middleware
 {
+    /**
+     * Libélula llama a este callback desde sus propios servidores (sin nuestra
+     * sesión ni token CSRF) para avisar que un pago se confirmó.
+     */
+    protected $except = [
+        'pagos/libelula/callback',
+    ];
+
     protected function getTokenFromRequest($request): ?string
     {
         return parent::getTokenFromRequest($request) ?: $request->input('csrf_token');

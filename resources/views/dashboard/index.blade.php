@@ -32,42 +32,21 @@ $qs = function ($cambios) use ($data) {
     .seg a:hover { color: var(--color-text); }
     .seg a.activo { background: var(--accent); color: #fff; }
 
-    /* contenedor: el perspective() es lo que da profundidad al giro 3D */
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; perspective: 1400px; }
-    
-    /* tarjeta base */
-    .kpi { position: relative; color: #fff; padding: 1.25rem 1.15rem; border: 0; border-radius: 22px; display: flex; flex-direction: column; gap: .35rem; transform-style: preserve-3d; will-change: transform; transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease; overflow: hidden; cursor: default; }
-    
-    /* el brillo: un gradiente radial que sigue al mouse via --mx/--my */
-    .kpi::before { content: ""; position: absolute; inset: 0; background: radial-gradient(160px 160px at var(--mx,50%) var(--my,0%), #ffffff3d, transparent 70%); opacity: 0; transition: opacity .35s ease; pointer-events: none; }
-    
-    /* fallback sin JS */
-    .kpi:hover { transform: translateY(-8px); }
-    .kpi:hover::before { opacity: 1; }
-    
-    /* el icono flota */
-    .kpi .icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(155deg, #ffffff4d, #ffffff14); border: 1px solid #ffffff40; box-shadow: inset 0 1px 1px #ffffff80, 0 10px 18px #0000001f; transition: transform .4s cubic-bezier(.2,.8,.2,1), box-shadow .4s ease; color: #fff; font-size: 1.1rem; }
-    .kpi:hover .icon { transform: scale(1.14) rotate(-6deg); box-shadow: inset 0 1px 1px #ffffffb0, 0 16px 26px #00000030; }
-    
-    /* los 4 degradados */
-    .kpi-3d--blue   { background: linear-gradient(150deg, #2f6fed 0%, #7c3aed 100%); box-shadow: 0 10px 26px #4338ca40; }
-    .kpi-3d--purple { background: linear-gradient(150deg, #c026d3 0%, #ec4899 100%); box-shadow: 0 10px 26px #c026d340; }
-    .kpi-3d--orange { background: linear-gradient(150deg, #f59e0b 0%, #f43f5e 100%); box-shadow: 0 10px 26px #f59e0b40; }
-    .kpi-3d--green  { background: linear-gradient(150deg, #10b981 0%, #0891b2 100%); box-shadow: 0 10px 26px #10b98140; }
-
-    .kpi-label { font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #ffffffcc; display: flex; align-items: center; gap: .6rem; }
-    .kpi-valor { font-size: 1.75rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; color: #fff; }
-    .kpi-nota { font-size: .82rem; color: #ffffffcc; }
+    /* Las tarjetas de indicadores usan el componente global .tool-card
+       (inclinacion 3D + brillo, .kpi-label/.kpi-valor, ver public/css/custom.css).
+       Aca solo va lo propio del dashboard: nota, delta y barra de split. */
+    .kpi-nota { font-size: .82rem; }
     .delta { font-weight: 700; }
-    .delta.sube { color: #a7f3d0; }
-    .delta.baja { color: #fca5a5; }
-    .barra-split { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--color-border); margin-top: .2rem; }
-    .barra-split span:first-child { background: var(--accent); }
-    .barra-split span:last-child { background: var(--accent-emerald); }
+    .delta.sube { color: #d1fae5; }
+    .delta.baja { color: #fecaca; }
+    .barra-split { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.25); margin-top: .2rem; }
+    .barra-split span:first-child { background: #fff; }
+    .barra-split span:last-child { background: rgba(255,255,255,.55); }
     .leyenda { display: flex; gap: .9rem; font-size: .78rem; color: var(--color-text-muted); }
     .leyenda i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    .kpi .leyenda { color: rgba(255,255,255,.85); }
 
-    .panel { background: var(--color-card-bg); border: 1px solid var(--color-border); border-radius: var(--radius-card); height: 100%; display: flex; flex-direction: column; }
+    .panel { background: var(--color-card-bg); border: 1px solid var(--color-border); border-radius: var(--radius-card); box-shadow: var(--shadow-soft); height: 100%; display: flex; flex-direction: column; }
     .panel-h { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .85rem 1.15rem; border-bottom: 1px solid var(--color-border); }
     .panel-h h5 { margin: 0; font-size: .98rem; font-weight: 700; }
     .panel-b { padding: 1rem 1.15rem; flex: 1; }
@@ -152,8 +131,8 @@ $qs = function ($cambios) use ($data) {
             <?php endif; ?>
 
             <!-- Indicadores -->
-            <section class="kpis kpis-3d" aria-label="Indicadores del periodo">
-                <div class="kpi kpi-3d kpi-3d--blue">
+            <section class="tool-grid" aria-label="Indicadores del periodo">
+                <div class="kpi tool-card tool-card--compact tool-card--blue">
                     <div class="kpi-label"><span class="icon"><i class="bi bi-cash-coin"></i></span> Ingresos por pasajes</div>
                     <div class="kpi-valor"><?php echo $bs($ventas->ingresos); ?></div>
                     <div class="kpi-nota">
@@ -169,24 +148,24 @@ $qs = function ($cambios) use ($data) {
                     <div class="leyenda"><span><i style="background: var(--accent)"></i>Efectivo <?php echo $bs($ventas->ingresos_efectivo); ?></span><span><i style="background: var(--accent-emerald)"></i>QR <?php echo $bs($ventas->ingresos_qr); ?></span></div>
                 </div>
 
-                <div class="kpi kpi-3d kpi-3d--purple">
+                <div class="kpi tool-card tool-card--compact tool-card--purple">
                     <div class="kpi-label"><span class="icon"><i class="bi bi-ticket-perforated"></i></span> Boletos vendidos</div>
                     <div class="kpi-valor"><?php echo number_format($ventas->boletos, 0, ',', '.'); ?></div>
-                    <div class="kpi-nota text-white-50">Precio promedio <?php echo $bs($promedio); ?></div>
+                    <div class="kpi-nota">Precio promedio <?php echo $bs($promedio); ?></div>
                 </div>
 
-                <div class="kpi kpi-3d kpi-3d--orange">
+                <div class="kpi tool-card tool-card--compact tool-card--orange">
                     <div class="kpi-label"><span class="icon"><i class="bi bi-people"></i></span> Ocupación de buses</div>
                     <div class="kpi-valor"><?php echo $porcOcupacion === null ? '—' : $porcOcupacion . '%'; ?></div>
-                    <div class="kpi-nota text-white-50">
+                    <div class="kpi-nota">
                         <?php echo (int) $ocup->viajes; ?> viaje(s) con salida en el periodo<?php if ($ocup->asientos_totales): ?> · <?php echo (int) $ocup->asientos_ocupados; ?> de <?php echo (int) $ocup->asientos_totales; ?> asientos<?php endif; ?>
                     </div>
                 </div>
 
-                <div class="kpi kpi-3d kpi-3d--green">
+                <div class="kpi tool-card tool-card--compact tool-card--green">
                     <div class="kpi-label"><span class="icon"><i class="bi bi-box-seam"></i></span> Encomiendas</div>
                     <div class="kpi-valor"><?php echo (int) $enc->registradas; ?></div>
-                    <div class="kpi-nota text-white-50"><?php echo $bs($enc->monto); ?> registradas · <?php echo (int) $enc->por_despachar; ?> por despachar · <?php echo (int) $enc->por_entregar; ?> por entregar</div>
+                    <div class="kpi-nota"><?php echo $bs($enc->monto); ?> registradas · <?php echo (int) $enc->por_despachar; ?> por despachar · <?php echo (int) $enc->por_entregar; ?> por entregar</div>
                 </div>
             </section>
 
@@ -383,36 +362,6 @@ $qs = function ($cambios) use ($data) {
                     y: { stacked: true, beginAtZero: true, grid: { color: colorGrilla }, ticks: { color: colorTexto, callback: fmt } }
                 }
             }
-        });
-    })();
-</script>
-
-<!-- Inclinacion 3D + brillo en las tarjetas de KPI (ver Tarjetas-3D-Degradado) -->
-<script>
-    (function() {
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const hasFinePointer = window.matchMedia('(pointer: fine)').matches;
-        if (reduceMotion || !hasFinePointer) return;
-
-        document.querySelectorAll('.kpi-3d').forEach(function(card) {
-            const icon = card.querySelector(".icon");
-
-            card.addEventListener('pointermove', function(event) {
-                const rect = card.getBoundingClientRect();
-                const px = (event.clientX - rect.left) / rect.width - 0.5;
-                const py = (event.clientY - rect.top) / rect.height - 0.5;
-
-                card.style.transform =
-                    'perspective(900px) rotateX(' + (-py * 9).toFixed(2) + 'deg) rotateY(' + (px * 11).toFixed(2) + 'deg) translateY(-8px)';
-                card.style.setProperty('--mx', ((px + 0.5) * 100) + '%');
-                card.style.setProperty('--my', ((py + 0.5) * 100) + '%');
-                
-                if (icon) icon.style.transform = `translate3d(${px * 12}px, ${py * 12}px, 24px) scale(1.14)`;
-            });
-            card.addEventListener('pointerleave', function() {
-                card.style.transform = '';
-                if (icon) icon.style.transform = '';
-            });
         });
     })();
 </script>

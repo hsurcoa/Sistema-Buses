@@ -63,6 +63,8 @@ Artisan::command('db:reporte', function () {
         'Rutas' => 'rutas',
         'Clientes (Pasajeros)' => 'clientes',
         'Viajes (Rutas Programadas)' => 'viajes',
+        'Boletos (todos los estados)' => 'boletos',
+        'Encomiendas' => 'encomiendas',
     ];
 
     $filas = [];
@@ -80,3 +82,12 @@ Artisan::command('db:seed-pando', function () {
     $this->call('db:seed', ['--class' => \Database\Seeders\PandoSeeder::class, '--force' => true]);
     $this->info('Datos de Pando insertados: terminales, rutas, buses de dos pisos, minibuses, choferes bolivianos y clientes.');
 })->purpose('Siembra los datos de ejemplo de Pando (equivalente a PandoSeeder)');
+
+// Datos de prueba end-to-end (5 por modulo): completa lo que PandoSeeder deja
+// en 0 -viajes, boletos vendidos, encomiendas- usando los servicios reales de
+// venta, no inserts crudos. Requiere haber corrido db:seed-pando antes.
+Artisan::command('db:seed-pruebas', function () {
+    $this->call('db:seed', ['--class' => \Database\Seeders\PandoSeeder::class, '--force' => true]);
+    $this->call('db:seed', ['--class' => \Database\Seeders\TestDataSeeder::class, '--force' => true]);
+    $this->info('Datos de prueba listos: 5 buses, 5 viajes programados, boletos vendidos y encomiendas por viaje, choferes asignados.');
+})->purpose('Siembra datos de prueba completos (rutas, viajes, boletos, encomiendas, asignaciones) para probar el sistema de punta a punta');

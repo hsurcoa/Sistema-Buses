@@ -6,6 +6,7 @@ use App\Mail\CredencialesGeneradas;
 use App\Models\Terminal;
 use App\Services\AsientoService;
 use App\Services\AsignacionService;
+use App\Services\ConfiguracionService;
 use App\Services\PersonalService;
 use App\Services\RolPermisoService;
 use App\Services\RutaService;
@@ -45,6 +46,7 @@ class AdminController extends Controller
         private TipoBusService $tiposBus,
         private AsientoService $asientos,
         private VehiculoService $vehiculos,
+        private ConfiguracionService $config,
     ) {}
 
     private function esAdministrador(): bool
@@ -452,10 +454,14 @@ class AdminController extends Controller
 
     public function registrarBuses()
     {
+        $alertasFlotaActivo = ! empty($this->config->obtenerConfiguracion()['alertas_flota_documentos_activo']);
+
         return view('admin.registrar_buses', ['data' => [
             'title' => 'Registrar Buses',
             'vehiculos' => $this->vehiculos->listarVehiculos(),
             'tipos_buses' => $this->tiposBus->listarTiposParaFlota(),
+            'alertas_flota_activo' => $alertasFlotaActivo,
+            'alertas_documentos' => $alertasFlotaActivo ? $this->vehiculos->alertasDocumentos() : ['criticos' => [], 'avisos' => []],
         ]]);
     }
 

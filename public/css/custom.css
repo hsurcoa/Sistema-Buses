@@ -768,6 +768,7 @@ button.seat:focus-visible {
     --seat-ink: #ffffff;
 }
 button.seat--vendido { cursor: not-allowed; }
+button.seat:disabled { opacity: 1; }
 
 .seat.is-selected {
     --seat-bg: var(--accent);
@@ -832,6 +833,55 @@ body.dark-mode .btn-light { background-color: #2a2a2a; border-color: var(--color
 body.dark-mode .rounded-circle.bg-light { background-color: #2a2a2a !important; }
 body.dark-mode .modal-content,
 body.dark-mode .dropdown-menu { background-color: var(--color-card-bg); color: var(--color-text); border-color: var(--color-border); }
+body.dark-mode .dropdown-item { color: var(--color-text); }
+body.dark-mode .dropdown-item:hover,
+body.dark-mode .dropdown-item:focus { background-color: #2a2a2a; color: var(--color-text); }
+body.dark-mode .dropdown-divider { border-color: var(--color-border); }
+
+/* Controles nativos del navegador (selector de fecha, flechita de <select>,
+   checkbox/radio, scrollbar en Chromium/Firefox): sin esto quedan con la
+   "cascarita" blanca de siempre aunque el resto del formulario ya sea oscuro. */
+body.dark-mode { color-scheme: dark; }
+
+/* Scrollbar: el thumb semitransparente-negro (definido arriba para modo
+   claro) es casi invisible sobre fondos oscuros. */
+body.dark-mode * { scrollbar-color: rgba(255, 255, 255, 0.22) transparent; }
+body.dark-mode *::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); }
+
+/* Badges de Bootstrap con fondo claro fijo (badge-light/secondary/info/etc.,
+   usados en tablas de manifiesto, caja y reportes) quedaban como cajitas
+   blancas encima del fondo oscuro. */
+body.dark-mode .badge.bg-light,
+body.dark-mode .badge.badge-light { background-color: #2a2a2a !important; color: var(--color-text) !important; border: 1px solid var(--color-border); }
+body.dark-mode .badge.bg-secondary,
+body.dark-mode .badge.badge-secondary { background-color: #3f3f46 !important; }
+body.dark-mode .badge.border { border-color: var(--color-border) !important; }
+
+/* Botones outline: el borde/tono pastel pensado para fondo blanco se
+   perdía contra el fondo oscuro. */
+body.dark-mode .btn-outline-secondary { color: var(--color-text-muted); border-color: var(--color-border); }
+body.dark-mode .btn-outline-secondary:hover { background-color: #2a2a2a; color: var(--color-text); }
+body.dark-mode .btn-outline-dark { color: var(--color-text); border-color: var(--color-border); }
+body.dark-mode .btn-outline-dark:hover { background-color: #2a2a2a; color: var(--color-text); }
+
+/* SweetAlert2: se inserta como hijo directo de <body>, fuera de .content-wrapper,
+   así que sin este bloque los popups quedaban blancos aunque todo el resto
+   de la pantalla ya estuviera en modo oscuro. */
+body.dark-mode .swal2-popup { background: var(--color-card-bg); color: var(--color-text); }
+body.dark-mode .swal2-title,
+body.dark-mode .swal2-html-container { color: var(--color-text); }
+body.dark-mode .swal2-input,
+body.dark-mode .swal2-textarea,
+body.dark-mode .swal2-select {
+    background-color: #262626;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+}
+body.dark-mode .swal2-select option { background-color: #262626; color: var(--color-text); }
+body.dark-mode .swal2-close { color: var(--color-text-muted); }
+body.dark-mode .swal2-close:hover { color: var(--color-text); }
+body.dark-mode .swal2-actions .swal2-cancel { background-color: #3f3f46 !important; }
+body.dark-mode .swal2-timer-progress-bar { background: rgba(255, 255, 255, 0.35); }
 
 /* ===================================================================
    Iconos de color + animación en el sidebar (Fase 2, pulido visual)
@@ -887,55 +937,90 @@ body.sidebar-open-mobile #sidebarToggle .bi { transform: rotate(90deg); }
 }
 
 /* ===================================================================
-   Tarjetas 3D con degradado (KPIs del dashboard) — efecto adaptado de
-   "Tarjetas-3D-Degradado" (inclinacion 3D + brillo que sigue el cursor).
-   Solo se usa en resources/views/dashboard/index.blade.php.
+   Tarjetas con inclinacion 3D y brillo — componente global reutilizable
+   (referencia SIPREVA). Usalo en cualquier modulo para tarjetas de
+   resumen/navegacion: contenedor .tool-grid + .tool-card.tool-card--color.
+   El tilt real (rotateX/rotateY + --mx/--my) lo agrega el JS en
+   resources/views/layouts/app.blade.php (delega en pointermove, se
+   auto-aplica a cualquier .tool-card que exista en la pagina).
    =================================================================== */
-.kpis-3d { perspective: 1400px; }
+.tool-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; perspective: 1400px; }
+.tool-grid--3 { grid-template-columns: repeat(3, 1fr); }
 
-.kpi-3d {
+.tool-card {
     position: relative;
     color: #fff;
+    padding: 26px;
     border: 0;
-    border-radius: var(--radius-card);
+    border-radius: 22px;
+    min-height: 230px;
+    display: flex;
+    flex-direction: column;
     transform-style: preserve-3d;
     will-change: transform;
-    transition: transform 0.35s cubic-bezier(.2,.8,.2,1), box-shadow 0.35s ease;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease;
     overflow: hidden;
+    cursor: pointer;
+    text-align: left;
 }
-.kpi-3d::before {
+
+/* variante compacta: tarjetas de resumen/KPI (dashboard, cabeceras de modulo) */
+.tool-card--compact { padding: 1.25rem 1.15rem; min-height: 0; gap: .5rem; border-radius: var(--radius-card); cursor: default; }
+
+.tool-card::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(160px 160px at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.24), transparent 70%);
+    background: radial-gradient(160px 160px at var(--mx,50%) var(--my,0%), #ffffff3d, transparent 70%);
     opacity: 0;
-    transition: opacity 0.35s ease;
+    transition: opacity .35s ease;
     pointer-events: none;
 }
-.kpi-3d:hover { transform: translateY(-6px); }
-.kpi-3d:hover::before { opacity: 1; }
 
-.kpi-3d .kpi-label,
-.kpi-3d .kpi-valor,
-.kpi-3d .kpi-nota,
-.kpi-3d .leyenda { color: rgba(255, 255, 255, 0.92) !important; }
-.kpi-3d .kpi-valor { color: #fff !important; }
-.kpi-3d .barra-split { background: rgba(255, 255, 255, 0.25) !important; }
-.kpi-3d .barra-split span:first-child { background: #fff !important; }
-.kpi-3d .barra-split span:last-child { background: rgba(255, 255, 255, 0.55) !important; }
-.kpi-3d .leyenda i { background: #fff !important; }
-.kpi-3d .leyenda span:last-child i { background: rgba(255, 255, 255, 0.55) !important; }
-.kpi-3d .delta.sube { color: #d1fae5 !important; }
-.kpi-3d .delta.baja { color: #fecaca !important; }
+.tool-card:hover { transform: translateY(-8px); }
+.tool-card:hover::before { opacity: 1; }
 
-.kpi-3d--ingresos { background: linear-gradient(150deg, #2f6fed 0%, #7c3aed 100%); box-shadow: 0 10px 26px rgba(67, 56, 202, 0.35); }
-.kpi-3d--boletos  { background: linear-gradient(150deg, #c026d3 0%, #ec4899 100%); box-shadow: 0 10px 26px rgba(192, 38, 211, 0.3); }
-.kpi-3d--ocupacion{ background: linear-gradient(150deg, #f59e0b 0%, #f43f5e 100%); box-shadow: 0 10px 26px rgba(245, 158, 11, 0.3); }
-.kpi-3d--encomiendas { background: linear-gradient(150deg, #10b981 0%, #0891b2 100%); box-shadow: 0 10px 26px rgba(16, 185, 129, 0.3); }
+.tool-card .icon {
+    display: grid;
+    place-items: center;
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+    background: linear-gradient(155deg, #ffffff4d, #ffffff14);
+    border: 1px solid #ffffff40;
+    box-shadow: inset 0 1px 1px #ffffff80, 0 10px 18px #0000001f;
+    transition: transform .4s cubic-bezier(.2,.8,.2,1), box-shadow .4s ease;
+    flex-shrink: 0;
+}
+.tool-card--compact .icon { width: 40px; height: 40px; border-radius: 12px; font-size: 1.1rem; }
+.tool-card:hover .icon {
+    transform: scale(1.14) rotate(-6deg);
+    box-shadow: inset 0 1px 1px #ffffffb0, 0 16px 26px #00000030;
+}
 
-.kpi-3d .kpi-label i { color: rgba(255, 255, 255, 0.85); }
+/* los 5 degradados: los 4 originales de la referencia + rojo (gastos/alertas) */
+.tool-card--blue   { background: linear-gradient(150deg, #2f6fed 0%, #7c3aed 100%); box-shadow: 0 10px 26px #4338ca40; }
+.tool-card--purple { background: linear-gradient(150deg, #c026d3 0%, #ec4899 100%); box-shadow: 0 10px 26px #c026d340; }
+.tool-card--orange { background: linear-gradient(150deg, #f59e0b 0%, #f43f5e 100%); box-shadow: 0 10px 26px #f59e0b40; }
+.tool-card--green  { background: linear-gradient(150deg, #10b981 0%, #0891b2 100%); box-shadow: 0 10px 26px #10b98140; }
+.tool-card--red    { background: linear-gradient(150deg, #ef4444 0%, #b91c1c 100%); box-shadow: 0 10px 26px #ef444440; }
+
+/* contenido: al usar .tool-card--color el texto pasa a blanco/translucido
+   sin importar que clases de texto (kpi-label, card-title, etc.) traiga */
+.tool-card[class*="tool-card--"] { color: #fff; }
+.tool-card[class*="tool-card--"] .text-muted,
+.tool-card[class*="tool-card--"] .kpi-nota,
+.tool-card[class*="tool-card--"] .kpi-label { color: rgba(255, 255, 255, 0.85) !important; }
+.tool-card[class*="tool-card--"] .kpi-valor { color: #fff; }
+
+/* contenido tipico de una tarjeta compacta: label + numero grande */
+.kpi-label { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; display: flex; align-items: center; gap: .6rem; }
+.kpi-valor { font-size: 1.9rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1199.98px) { .tool-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 575.98px) { .tool-grid { grid-template-columns: 1fr; } }
 
 @media (prefers-reduced-motion: reduce) {
-    .kpi-3d { transition: none; }
     .sidebar-menu .nav-icon { transition: none; }
+    .tool-card { transition: none; }
 }

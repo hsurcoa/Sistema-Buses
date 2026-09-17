@@ -30,6 +30,15 @@ foreach ($data['vehiculos'] ?? [] as $bus) {
         $revisionAviso[] = ['id' => $bus->id, 'placa' => $bus->placa, 'texto' => "El modelo \"{$bus->modelo}\" parece ser el año, no el modelo (p. ej. debería decir Paradiso 1800)."];
     }
 }
+// SOAT/ITV vencidos o por vencer (activable/desactivable en Configuración).
+if (!empty($data['alertas_flota_activo'])) {
+    foreach ($data['alertas_documentos']['criticos'] ?? [] as $a) {
+        $revisionCritica[] = $a;
+    }
+    foreach ($data['alertas_documentos']['avisos'] ?? [] as $a) {
+        $revisionAviso[] = $a;
+    }
+}
 $revisionFlota = array_merge($revisionCritica, $revisionAviso);
 ?>
 <!--begin::App Main-->
@@ -245,7 +254,7 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
 
 <!-- WIZARD MODAL FULL -->
 <div class="modal fade" id="modalWizardBus" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 rounded-4 shadow-lg overflow-hidden">
             <!-- Header -->
             <div class="modal-header border-0 pb-0 position-relative" style="z-index: 10;">
@@ -256,14 +265,14 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
             <div class="modal-body p-0">
                 <div class="row g-0 h-100">
                     <!-- Sidebar Visual -->
-                    <div class="col-lg-3 d-none d-lg-block bg-primary text-white p-5 position-relative overflow-hidden">
+                    <div class="col-lg-3 d-none d-lg-block bg-primary text-white p-4 position-relative overflow-hidden">
                         <div class="position-absolute top-0 start-0 w-100 h-100" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); opacity: 0.9;"></div>
-                        <i class="bi bi-bus-front position-absolute" style="font-size: 15rem; bottom: -50px; right: -50px; opacity: 0.1; transform: rotate(-15deg);"></i>
+                        <i class="bi bi-bus-front position-absolute" style="font-size: 10rem; bottom: -50px; right: -50px; opacity: 0.1; transform: rotate(-15deg);"></i>
 
                         <div class="position-relative z-2 h-100 d-flex flex-column justify-content-between">
                             <div>
-                                <h3 class="fw-bold mb-4">Registro de Nueva Unidad</h3>
-                                <p class="opacity-75">Complete todos los datos requeridos para la ficha técnica del vehículo.</p>
+                                <h5 class="fw-bold mb-3">Registro de Nueva Unidad</h5>
+                                <p class="opacity-75 small">Complete todos los datos requeridos para la ficha técnica del vehículo.</p>
                             </div>
 
                             <!-- Steps Vertical Indicator on Sidebar -->
@@ -287,12 +296,13 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                     </div>
 
                     <!-- Form Content -->
-                    <div class="col-lg-9 bg-white p-5">
+                    <div class="col-12 col-lg-9 bg-white p-3 p-md-4">
                         <form id="wizardForm" action="<?php echo URLROOT; ?>/vehiculos/guardar" method="POST">
+                            <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
 
                             <!-- Step 1: Identidad -->
                             <div class="wizard-step active" id="step1">
-                                <h4 class="fw-bold text-dark mb-4">Identidad y Legalidad</h4>
+                                <h5 class="fw-bold text-dark mb-3">Identidad y Legalidad</h5>
 
                                 <div class="row g-4">
                                     <div class="col-12">
@@ -319,12 +329,45 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                                             <input type="text" class="form-control bg-light border-start-0" name="tarjeta_circulacion" required>
                                         </div>
                                     </div>
+
+                                    <div class="col-12"><hr class="my-2"></div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold text-secondary text-uppercase small">SOAT</label>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-shield-check"></i></span>
+                                            <input type="text" class="form-control bg-light border-start-0" name="soat_numero" placeholder="N° de póliza (opcional)">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light border-end-0">Vence</span>
+                                            <input type="date" class="form-control bg-light border-start-0" name="soat_vencimiento">
+                                        </div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold text-secondary text-uppercase small">ITV (Inspección Técnica Vehicular)</label>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light border-end-0"><i class="bi bi-clipboard-check"></i></span>
+                                            <input type="text" class="form-control bg-light border-start-0" name="itv_numero" placeholder="N° de certificado (opcional)">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light border-end-0">Vence</span>
+                                            <input type="date" class="form-control bg-light border-start-0" name="itv_vencimiento">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Step 2: Ficha Técnica Completa -->
                             <div class="wizard-step" id="step2">
-                                <h4 class="fw-bold text-dark mb-4">Ficha Técnica Detallada</h4>
+                                <h5 class="fw-bold text-dark mb-3">Ficha Técnica Detallada</h5>
 
                                 <!-- Básicos -->
                                 <div class="row g-3 mb-4">
@@ -422,7 +465,7 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
 
                             <!-- Step 3: Visual & Servicio -->
                             <div class="wizard-step" id="step3">
-                                <h4 class="fw-bold text-dark mb-4">Servicio y Características</h4>
+                                <h5 class="fw-bold text-dark mb-3">Servicio y Características</h5>
 
                                 <!-- Capacidad y Servicio (Crucial) -->
                                 <div class="bg-light p-3 rounded-3 mb-4">
@@ -558,14 +601,14 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                             </div>
 
                             <!-- Actions -->
-                            <div class="d-flex justify-content-between mt-5 pt-3 border-top">
+                            <div class="d-flex flex-wrap gap-2 justify-content-between mt-4 pt-3 border-top">
                                 <button type="button" class="btn btn-light text-muted px-4" id="btnPrev" disabled>
                                     <i class="bi bi-arrow-left me-2"></i>Atrás
                                 </button>
-                                <button type="button" class="btn btn-primary px-5 rounded-pill shadow" id="btnNext">
+                                <button type="button" class="btn btn-primary px-4 rounded-pill shadow" id="btnNext">
                                     Siguiente <i class="bi bi-arrow-right ms-2"></i>
                                 </button>
-                                <button type="submit" class="btn btn-success px-5 rounded-pill shadow d-none" id="btnFinish">
+                                <button type="submit" class="btn btn-success px-4 rounded-pill shadow d-none" id="btnFinish">
                                     Finalizar Registro <i class="bi bi-check-lg ms-2"></i>
                                 </button>
                             </div>
@@ -592,6 +635,7 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
             <!-- Body -->
             <div class="modal-body p-4">
                 <form id="formEditarBus">
+                    <input type="hidden" name="csrf_token" value="<?php echo csrf_token(); ?>">
                     <!-- Campo oculto para el ID -->
                     <input type="hidden" id="editBusId" name="id">
 
@@ -633,6 +677,22 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                                                 <span class="input-group-text bg-white"><i class="bi bi-card-text"></i></span>
                                                 <input type="text" class="form-control" id="editTarjetaCirculacion" name="tarjeta_circulacion" required>
                                             </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label text-secondary small fw-bold">N° SOAT</label>
+                                            <input type="text" class="form-control form-control-sm" id="editSoatNumero" name="soat_numero" placeholder="Opcional">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label text-secondary small fw-bold">SOAT vence</label>
+                                            <input type="date" class="form-control form-control-sm" id="editSoatVencimiento" name="soat_vencimiento">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label text-secondary small fw-bold">N° ITV</label>
+                                            <input type="text" class="form-control form-control-sm" id="editItvNumero" name="itv_numero" placeholder="Opcional">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label class="form-label text-secondary small fw-bold">ITV vence</label>
+                                            <input type="date" class="form-control form-control-sm" id="editItvVencimiento" name="itv_vencimiento">
                                         </div>
                                     </div>
                                     <div class="row g-2 mb-3">
@@ -850,15 +910,15 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
 
     /* Estilos Custom Wizard */
     .steps-vertical {
-        margin-top: 3rem;
+        margin-top: 1.5rem;
         position: relative;
         padding-left: 1rem;
     }
 
     .step-item {
         position: relative;
-        padding-bottom: 3rem;
-        padding-left: 3rem;
+        padding-bottom: 1.75rem;
+        padding-left: 2.75rem;
         opacity: 0.5;
         transition: all 0.3s ease;
     }
@@ -871,15 +931,15 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
         position: absolute;
         left: 0;
         top: 0;
-        width: 40px;
-        height: 40px;
+        width: 34px;
+        height: 34px;
         background: rgba(255, 255, 255, 0.2);
         border: 2px solid rgba(255, 255, 255, 0.5);
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.2rem;
+        font-size: 1rem;
     }
 
     .step-item.active .step-icon {
@@ -891,15 +951,15 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
 
     .step-label {
         font-weight: 600;
-        font-size: 1.1rem;
+        font-size: 0.92rem;
         letter-spacing: 0.5px;
     }
 
     .step-line {
         position: absolute;
-        left: 19px;
-        top: 40px;
-        bottom: -10px;
+        left: 16px;
+        top: 34px;
+        bottom: -8px;
         width: 2px;
         background: rgba(255, 255, 255, 0.2);
     }
@@ -1246,7 +1306,7 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: 'id=' + busId
+                body: 'id=' + busId + '&csrf_token=<?php echo urlencode(csrf_token()); ?>'
             })
             .then(response => {
                 const contentType = response.headers.get('content-type');
@@ -1266,6 +1326,10 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                     document.getElementById('editPropietarioApellidos').value = data.bus.propietario_apellidos || '';
                     document.getElementById('editPlaca').value = data.bus.placa || '';
                     document.getElementById('editTarjetaCirculacion').value = data.bus.tarjeta_circulacion || '';
+                    document.getElementById('editSoatNumero').value = data.bus.soat_numero || '';
+                    document.getElementById('editSoatVencimiento').value = data.bus.soat_vencimiento || '';
+                    document.getElementById('editItvNumero').value = data.bus.itv_numero || '';
+                    document.getElementById('editItvVencimiento').value = data.bus.itv_vencimiento || '';
                     document.getElementById('editMarca').value = data.bus.marca || '';
                     document.getElementById('editModelo').value = data.bus.modelo || '';
                     document.getElementById('editAnio').value = data.bus.anio || '';
@@ -1464,7 +1528,7 @@ $revisionFlota = array_merge($revisionCritica, $revisionAviso);
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded'
                         },
-                        body: 'id=' + busId
+                        body: 'id=' + busId + '&csrf_token=<?php echo urlencode(csrf_token()); ?>'
                     })
                     .then(response => {
                         const contentType = response.headers.get('content-type');

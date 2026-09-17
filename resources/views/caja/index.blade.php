@@ -24,83 +24,81 @@
                     </span>
                     <div class="mt-2 text-muted small">
                         Sucursal: <strong class="text-dark"><?php echo htmlspecialchars($data['caja_abierta']->sucursal_nombre ?? 'Sin sucursal'); ?></strong><br>
-                        Abierta por: <strong class="text-dark"><?php echo htmlspecialchars($_SESSION['usuario'] ?? 'Usuario'); ?></strong><br>
+                        Abierta por: <strong class="text-dark"><?php echo htmlspecialchars(auth()->user()?->nombreCompleto() ?? 'Usuario'); ?></strong><br>
                         Desde: <?php echo date('d/m/Y H:i', strtotime($data['caja_abierta']->fecha_apertura)); ?>
                     </div>
                 </div>
             </div>
 
-            <!-- Resumen Financiero -->
-            <div class="row g-4 mb-5">
+            <!-- Resumen Financiero (componente global .tool-card, ver public/css/custom.css) -->
+            <div class="tool-grid tool-grid--3 mb-3">
                 <!-- Tarjeta Monto Inicial -->
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm bg-light">
-                        <div class="card-body">
-                            <h6 class="text-muted text-uppercase small fw-bold">Fondo Inicial (Base)</h6>
-                            <div class="d-flex align-items-center mt-2">
-                                <div class="icon-box bg-white text-secondary rounded-circle shadow-sm me-3 p-3">
-                                    <i class="bi bi-safe2 fs-4"></i>
-                                </div>
-                                <h3 class="fw-bold mb-0 text-secondary">Bs. <?php echo number_format($data['resumen']->monto_inicial, 2); ?></h3>
-                            </div>
-                        </div>
-                    </div>
+                <div class="tool-card tool-card--compact tool-card--blue">
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-safe2"></i></span> Fondo Inicial (Base)</div>
+                    <div class="kpi-valor">Bs. <?php echo number_format($data['resumen']->monto_inicial, 2); ?></div>
                 </div>
 
                 <!-- Tarjeta Ingresos -->
-                <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm bg-success text-white">
-                        <div class="card-body">
-                            <h6 class="text-white-50 text-uppercase small fw-bold">Total Ingresos (+Ventas)</h6>
-                            <div class="d-flex align-items-center mt-2">
-                                <div class="icon-box bg-white text-success rounded-circle shadow-sm me-3 p-3">
-                                    <i class="bi bi-graph-up-arrow fs-4"></i>
-                                </div>
-                                <h3 class="fw-bold mb-0">Bs. <?php echo number_format($data['resumen']->total_ingresos, 2); ?></h3>
-                            </div>
-                            <div class="small text-white-50 mt-2">
-                                Efectivo: Bs. <?php echo number_format((float) $data['resumen']->total_efectivo, 2); ?>
-                                · QR: Bs. <?php echo number_format((float) $data['resumen']->total_qr, 2); ?>
-                            </div>
-                            <!-- BOTÓN REPORTE -->
-                            <button class="btn btn-sm btn-light text-success fw-bold position-absolute top-0 end-0 m-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalReporteIngresos">
-                                <i class="bi bi-file-earmark-bar-graph me-1"></i> REPORTES
-                            </button>
-                        </div>
-                    </div>
+                <div class="tool-card tool-card--compact tool-card--green">
+                    <button type="button" class="btn btn-sm btn-light text-success fw-bold position-absolute top-0 end-0 m-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalReporteIngresos">
+                        <i class="bi bi-file-earmark-bar-graph me-1"></i> REPORTES
+                    </button>
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-graph-up-arrow"></i></span> Total Ingresos (+Ventas)</div>
+                    <div class="kpi-valor">Bs. <?php echo number_format($data['resumen']->total_ingresos, 2); ?></div>
                 </div>
 
                 <!-- Tarjeta Egresos -->
+                <div class="tool-card tool-card--compact tool-card--red">
+                    <button type="button" class="btn btn-sm btn-light text-danger fw-bold position-absolute top-0 end-0 m-3 shadow-sm" onclick="registrarGasto()">
+                        <i class="bi bi-plus-circle me-1"></i> NUEVO GASTO
+                    </button>
+                    <div class="kpi-label"><span class="icon"><i class="bi bi-graph-down-arrow"></i></span> Total Egresos (-Gastos)</div>
+                    <div class="kpi-valor">Bs. <?php echo number_format($data['resumen']->total_egresos, 2); ?></div>
+                </div>
+            </div>
+
+            <!-- Desglose por vía de pago: quién pagó en efectivo, con el QR fijo o por Libélula -->
+            <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                    <div class="card h-100 border-0 shadow-sm bg-danger text-white">
-                        <div class="card-body position-relative">
-                            <h6 class="text-white-50 text-uppercase small fw-bold">Total Egresos (-Gastos)</h6>
-                            <div class="d-flex align-items-center mt-2">
-                                <div class="icon-box bg-white text-danger rounded-circle shadow-sm me-3 p-3">
-                                    <i class="bi bi-graph-down-arrow fs-4"></i>
-                                </div>
-                                <h3 class="fw-bold mb-0">Bs. <?php echo number_format($data['resumen']->total_egresos, 2); ?></h3>
-                            </div>
-                            <!-- BOTÓN NUEVO GASTO -->
-                            <button class="btn btn-sm btn-light text-danger fw-bold position-absolute top-0 end-0 m-3 shadow-sm" onclick="registrarGasto()">
-                                <i class="bi bi-plus-circle me-1"></i> NUEVO GASTO
-                            </button>
+                    <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-success">
+                        <div class="card-body py-3">
+                            <div class="small text-muted fw-bold text-uppercase"><i class="bi bi-cash-coin me-1"></i> Efectivo</div>
+                            <h4 class="fw-bold mb-0">Bs. <?php echo number_format((float) $data['resumen']->total_efectivo, 2); ?></h4>
+                            <div class="small text-muted">Está físicamente en el cajón</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-secondary">
+                        <div class="card-body py-3">
+                            <div class="small text-muted fw-bold text-uppercase"><i class="bi bi-qr-code me-1"></i> QR Fijo (manual)</div>
+                            <h4 class="fw-bold mb-0">Bs. <?php echo number_format((float) $data['resumen']->total_qr_fijo, 2); ?></h4>
+                            <div class="small text-muted">Confirmado a mano por el cajero, verifique en la cuenta</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-primary">
+                        <div class="card-body py-3">
+                            <div class="small text-muted fw-bold text-uppercase"><i class="bi bi-credit-card-2-front me-1"></i> Libélula</div>
+                            <h4 class="fw-bold mb-0">Bs. <?php echo number_format((float) $data['resumen']->total_qr_libelula, 2); ?></h4>
+                            <div class="small text-muted">Confirmado automático por la pasarela</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row">
+            <div class="row g-4">
                 <!-- Formulario de Cierre de Caja -->
-                <div class="col-lg-6 mx-auto">
-                    <div class="card shadow rounded-3 border-0">
+                <div class="col-xl-5">
+                    <div class="card shadow rounded-3 border-0 h-100">
                         <div class="card-header bg-dark text-white py-3">
                             <h5 class="fw-bold mb-0 text-center"><i class="bi bi-shield-lock-fill me-2"></i>Arqueo y Cierre de Caja</h5>
                         </div>
                         <div class="card-body p-4">
 
                             <?php
-                            // Solo el efectivo debe estar en el cajon; los cobros QR van a la cuenta del dueño
+                            // Solo el efectivo debe estar en el cajon; los cobros QR (fijos o Libélula) van a una cuenta, no al cajón
                             $saldoSistema = ($data['resumen']->monto_inicial + $data['resumen']->total_efectivo) - $data['resumen']->total_egresos;
                             ?>
 
@@ -138,6 +136,43 @@
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Movimientos en vivo de esta sesión, con filtros -->
+                <div class="col-xl-7">
+                    <div class="card shadow rounded-3 border-0 h-100">
+                        <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <h5 class="fw-bold mb-0"><i class="bi bi-list-ul me-2"></i>Movimientos de esta sesión</h5>
+                            <div class="d-flex gap-2">
+                                <select class="form-select form-select-sm" id="filtroTipoMov" style="width:auto">
+                                    <option value="">Todos</option>
+                                    <option value="INGRESO">Ingresos</option>
+                                    <option value="EGRESO">Egresos</option>
+                                </select>
+                                <select class="form-select form-select-sm" id="filtroViaMov" style="width:auto">
+                                    <option value="">Cualquier vía</option>
+                                    <option value="EFECTIVO">Efectivo</option>
+                                    <option value="QR_FIJO">QR Fijo</option>
+                                    <option value="LIBELULA">Libélula</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body p-0" style="max-height: 420px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light" style="position: sticky; top: 0;">
+                                    <tr>
+                                        <th class="ps-3">Hora</th>
+                                        <th>Descripción</th>
+                                        <th>Vía</th>
+                                        <th class="text-end pe-3">Monto</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyMovimientosSesion">
+                                    <tr><td colspan="4" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -216,6 +251,34 @@
                     </div>
                 </div>
 
+                <!-- Desglose por vía de pago -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-bold text-success"><i class="bi bi-cash-coin me-1"></i> Efectivo</span>
+                                <span class="fw-bold" id="kpi_via_efectivo">Bs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-bold text-secondary"><i class="bi bi-qr-code me-1"></i> QR Fijo</span>
+                                <span class="fw-bold" id="kpi_via_qrfijo">Bs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-bold text-primary"><i class="bi bi-credit-card-2-front me-1"></i> Libélula</span>
+                                <span class="fw-bold" id="kpi_via_libelula">Bs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tabla -->
                 <div class="card border-0 shadow-sm">
                     <div class="card-body p-0 table-responsive">
@@ -224,6 +287,7 @@
                                 <tr>
                                     <th class="ps-3">Fecha y Hora</th>
                                     <th>Tipo</th>
+                                    <th>Vía</th>
                                     <th>Descripción</th>
                                     <th>Usuario</th>
                                     <th class="text-end pe-3">Monto</th>
@@ -319,6 +383,34 @@
                     </div>
                 </div>
 
+                <!-- Desglose por vía de pago del período -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-bold text-success"><i class="bi bi-cash-coin me-1"></i> Efectivo</span>
+                                <span class="fw-bold" id="kpi_cierre_efectivo">Bs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-bold text-secondary"><i class="bi bi-qr-code me-1"></i> QR Fijo</span>
+                                <span class="fw-bold" id="kpi_cierre_qrfijo">Bs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100">
+                            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-bold text-primary"><i class="bi bi-credit-card-2-front me-1"></i> Libélula</span>
+                                <span class="fw-bold" id="kpi_cierre_libelula">Bs. 0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tabla -->
                 <div class="card border-0 shadow-sm">
                     <div class="card-body p-0 table-responsive">
@@ -330,7 +422,9 @@
                                     <th>Apertura</th>
                                     <th>Cierre</th>
                                     <th class="text-end">Inicial</th>
-                                    <th class="text-end">Ingresos</th>
+                                    <th class="text-end">Efectivo</th>
+                                    <th class="text-end">QR Fijo</th>
+                                    <th class="text-end">Libélula</th>
                                     <th class="text-end">Egresos</th>
                                     <th class="text-end">Sistema</th>
                                     <th class="text-end">Real</th>
@@ -473,6 +567,64 @@
         });
     }
 
+    // --- MOVIMIENTOS EN VIVO DE LA SESIÓN (con filtro de tipo y vía de pago) ---
+    function badgeVia(via) {
+        const mapa = {
+            EFECTIVO: '<span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-cash-coin me-1"></i>Efectivo</span>',
+            QR_FIJO: '<span class="badge bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-qr-code me-1"></i>QR Fijo</span>',
+            LIBELULA: '<span class="badge bg-primary-subtle text-primary-emphasis"><i class="bi bi-credit-card-2-front me-1"></i>Libélula</span>',
+        };
+        return mapa[via] || via;
+    }
+
+    function cargarMovimientosSesion() {
+        const tbody = document.getElementById('tbodyMovimientosSesion');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+
+        $.ajax({
+            url: '<?php echo URLROOT; ?>/caja/obtener_movimientos_sesion_ajax',
+            type: 'POST',
+            data: {
+                csrf_token: CSRF_TOKEN,
+                tipo: $('#filtroTipoMov').val(),
+                via: $('#filtroViaMov').val()
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res.status !== 'success') {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">' + (res.message || 'Error') + '</td></tr>';
+                    return;
+                }
+                if (!res.data.length) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">Sin movimientos para este filtro</td></tr>';
+                    return;
+                }
+                let html = '';
+                res.data.forEach(m => {
+                    const hora = new Date(m.fecha_creacion.replace(' ', 'T')).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' });
+                    const esIngreso = m.tipo_movimiento === 'INGRESO';
+                    const signo = esIngreso ? '+' : '−';
+                    const colorMonto = esIngreso ? 'text-success' : 'text-danger';
+                    html += `<tr>
+                        <td class="ps-3 small text-muted">${hora}</td>
+                        <td class="small">${m.descripcion}</td>
+                        <td>${badgeVia(m.via_pago)}</td>
+                        <td class="text-end pe-3 fw-bold ${colorMonto}">${signo} Bs. ${parseFloat(m.monto).toFixed(2)}</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            },
+            error: function() {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Error de conexión</td></tr>';
+            }
+        });
+    }
+
+    $(document).ready(function() {
+        cargarMovimientosSesion();
+        $('#filtroTipoMov, #filtroViaMov').on('change', cargarMovimientosSesion);
+    });
+
     // --- NUEVA LÓGICA DE REPORTES ---
     $(document).ready(function() {
         // Cargar reporte del día al abrir modal
@@ -500,6 +652,7 @@
             url: '<?php echo URLROOT; ?>/caja/obtener_ingresos_ajax',
             type: 'POST',
             data: {
+                csrf_token: CSRF_TOKEN,
                 tipo: tipo,
                 fecha_inicio: inicio,
                 fecha_fin: fin
@@ -522,13 +675,14 @@
     function renderizarTabla(data) {
         let html = '';
         if (data.length === 0) {
-            html = '<tr><td colspan="5" class="text-center text-muted py-4">No se encontraron movimientos en este periodo.</td></tr>';
+            html = '<tr><td colspan="6" class="text-center text-muted py-4">No se encontraron movimientos en este periodo.</td></tr>';
         } else {
             data.forEach(item => {
                 html += `
                     <tr>
                         <td class="ps-3 align-middle">${item.fecha_creacion}</td>
                         <td class="align-middle"><span class="badge bg-light text-dark border">${item.tipo}</span></td>
+                        <td class="align-middle">${badgeVia(item.via_pago)}</td>
                         <td class="align-middle">${item.descripcion}</td>
                         <td class="align-middle text-muted small text-uppercase">${item.usuario}</td>
                         <td class="text-end fw-bold text-success pe-3">Bs. ${parseFloat(item.monto).toFixed(2)}</td>
@@ -540,8 +694,14 @@
     }
 
     function calcularKPIs(data) {
-        let total = 0;
-        data.forEach(i => total += parseFloat(i.monto));
+        let total = 0, efectivo = 0, qrFijo = 0, libelula = 0;
+        data.forEach(i => {
+            const monto = parseFloat(i.monto);
+            total += monto;
+            if (i.via_pago === 'EFECTIVO') efectivo += monto;
+            else if (i.via_pago === 'QR_FIJO') qrFijo += monto;
+            else if (i.via_pago === 'LIBELULA') libelula += monto;
+        });
 
         let count = data.length;
         let promedio = count > 0 ? total / count : 0;
@@ -549,6 +709,9 @@
         $('#kpi_total').text('Bs. ' + total.toFixed(2));
         $('#kpi_count').text(count);
         $('#kpi_promedio').text('Bs. ' + promedio.toFixed(2));
+        $('#kpi_via_efectivo').text('Bs. ' + efectivo.toFixed(2));
+        $('#kpi_via_qrfijo').text('Bs. ' + qrFijo.toFixed(2));
+        $('#kpi_via_libelula').text('Bs. ' + libelula.toFixed(2));
     }
 
     function exportarExcel() {
@@ -598,12 +761,13 @@
         let fin = $('#cierre_fin').val();
 
         // Mostrar spinner de carga
-        $('#tablaCierresBody').html('<tr><td colspan="11" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>');
+        $('#tablaCierresBody').html('<tr><td colspan="13" class="text-center py-4"><div class="spinner-border text-primary"></div></td></tr>');
 
         $.ajax({
             url: '<?php echo URLROOT; ?>/caja/obtener_reportes_cierre_ajax',
             type: 'POST',
             data: {
+                csrf_token: CSRF_TOKEN,
                 tipo: tipo,
                 fecha_inicio: inicio,
                 fecha_fin: fin
@@ -621,12 +785,12 @@
                         $('#cierre_fin').val(res.periodo.fin);
                     }
                 } else {
-                    $('#tablaCierresBody').html('<tr><td colspan="11" class="text-center text-danger py-3">' + res.message + '</td></tr>');
+                    $('#tablaCierresBody').html('<tr><td colspan="13" class="text-center text-danger py-3">' + res.message + '</td></tr>');
                 }
             },
             error: function(xhr, status, error) {
                 console.error("Error AJAX:", error);
-                $('#tablaCierresBody').html('<tr><td colspan="11" class="text-center text-danger py-3">Error de conexión al obtener reportes</td></tr>');
+                $('#tablaCierresBody').html('<tr><td colspan="13" class="text-center text-danger py-3">Error de conexión al obtener reportes</td></tr>');
             }
         });
     }
@@ -634,7 +798,7 @@
     function renderizarTablaCierres(data) {
         let html = '';
         if (!data || data.length === 0) {
-            html = '<tr><td colspan="11" class="text-center text-muted py-4">No hay cierres en este período</td></tr>';
+            html = '<tr><td colspan="13" class="text-center text-muted py-4">No hay cierres en este período</td></tr>';
         } else {
             data.forEach(item => {
                 let badgeDif = parseFloat(item.diferencia) === 0 ? '<span class="badge bg-success">PERFECTO</span>' :
@@ -647,7 +811,9 @@
                     <td class="small">${item.fecha_apertura}</td>
                     <td class="small">${item.fecha_cierre}</td>
                     <td class="text-end">Bs. ${parseFloat(item.monto_inicial).toFixed(2)}</td>
-                    <td class="text-end text-success">Bs. ${parseFloat(item.total_ingresos || 0).toFixed(2)}</td>
+                    <td class="text-end text-success">Bs. ${parseFloat(item.total_efectivo || 0).toFixed(2)}</td>
+                    <td class="text-end text-secondary">Bs. ${parseFloat(item.total_qr_fijo || 0).toFixed(2)}</td>
+                    <td class="text-end text-primary">Bs. ${parseFloat(item.total_qr_libelula || 0).toFixed(2)}</td>
                     <td class="text-end text-danger">Bs. ${parseFloat(item.total_egresos || 0).toFixed(2)}</td>
                     <td class="text-end fw-bold">Bs. ${parseFloat(item.monto_final_sistema).toFixed(2)}</td>
                     <td class="text-end fw-bold">Bs. ${parseFloat(item.monto_final_real).toFixed(2)}</td>
@@ -664,6 +830,9 @@
         $('#kpi_sesiones').text(stats.total_sesiones || 0);
         $('#kpi_sistema').text('Bs. ' + parseFloat(stats.suma_sistema || 0).toFixed(2));
         $('#kpi_real').text('Bs. ' + parseFloat(stats.suma_real || 0).toFixed(2));
+        $('#kpi_cierre_efectivo').text('Bs. ' + parseFloat(stats.suma_efectivo || 0).toFixed(2));
+        $('#kpi_cierre_qrfijo').text('Bs. ' + parseFloat(stats.suma_qr_fijo || 0).toFixed(2));
+        $('#kpi_cierre_libelula').text('Bs. ' + parseFloat(stats.suma_qr_libelula || 0).toFixed(2));
 
         let diff = parseFloat(stats.suma_diferencias || 0);
         let colorClass = diff === 0 ? 'text-dark' : (diff > 0 ? 'text-primary' : 'text-danger');

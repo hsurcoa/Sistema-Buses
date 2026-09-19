@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\DB;
 /** Reescritura Eloquent de `legacy/app/models/EncomiendaModel.php`. */
 class EncomiendaService
 {
+    /** Orden real del ciclo de vida de una encomienda (coincide con el enum de la columna). */
+    private const ORDEN_ESTADOS = ['REGISTRADO', 'EN_ALMACEN_ORIGEN', 'EN_RUTA', 'EN_DESTINO', 'ENTREGADO'];
+
     public function obtenerTarifaPorRuta(int $rutaId): ?object
     {
         return DB::table('tarifas_encomienda')->where('ruta_id', $rutaId)->where('estado', 1)->first();
@@ -104,6 +107,7 @@ class EncomiendaService
                     'descripcion' => $datos['descripcion'],
                     'peso_kg' => $datos['peso'],
                     'tipo_carga' => $datos['tipo_carga'],
+                    'tipo_paquete_id' => $datos['tipo_paquete_id'] ?: null,
                     'valor_declarado' => $datos['valor_declarado'],
                     'precio_calculado' => $totalCalculado,
                 ]);
@@ -123,6 +127,46 @@ class EncomiendaService
         } catch (\Exception $e) {
             return ['status' => false, 'message' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Avanza el estado de una encomienda (REGISTRADO → EN_ALMACEN_ORIGEN →
+     * EN_RUTA → EN_DESTINO → ENTREGADO). Nunca retrocede ni salta hacia
+     * atras, y una ya ENTREGADO queda bloqueada. Para marcar ENTREGADO, si
+     * la encomienda tiene clave de retiro cargada, hay que confirmarla
+     * (evita que cualquiera la marque como entregada sin verificar al
+     * destinatario).
+     */
+    public function cambiarEstado(int $id, string $nuevoEstado, ?string $claveRetiro = null): array
+    {
+        if (! in_array($nuevoEstado, self::ORDEN_ESTADOS, true)) {
+            return ['status' => false, 'message' => 'Estado no válido.'];
+        }
+
+        $enc = DB::table('encomiendas')->where('id', $id)->first();
+        if (! $enc) {
+            return ['status' => false, 'message' => 'Encomienda no encontrada.'];
+        }
+
+        if ($enc->estado === 'ENTREGADO') {
+            return ['status' => false, 'message' => 'Esta encomienda ya fue entregada.'];
+        }
+
+        $idxActual = array_search($enc->estado, self::ORDEN_ESTADOS, true);
+        $idxNuevo = array_search($nuevoEstado, self::ORDEN_ESTADOS, true);
+        if ($idxNuevo === false || $idxNuevo <= $idxActual) {
+            return ['status' => false, 'message' => 'No se puede retroceder el estado de una encomienda.'];
+        }
+
+        if ($nuevoEstado === 'ENTREGADO' && ! empty($enc->clave_retiro)) {
+            if (trim((string) $claveRetiro) !== $enc->clave_retiro) {
+                return ['status' => false, 'message' => 'La clave de retiro no coincide.'];
+            }
+        }
+
+        DB::table('encomiendas')->where('id', $id)->update(['estado' => $nuevoEstado]);
+
+        return ['status' => true, 'estado' => $nuevoEstado];
     }
 
     private function generarCodigoGuia(): string
@@ -146,12 +190,18 @@ class EncomiendaService
 
     public function listarViajesFuturosPorRuta(int $rutaId)
     {
+        // v.fecha_salida ya es un DATETIME completo (incluye la hora); concatenarlo
+        // con v.hora_salida producia un string invalido ("...12:00:00 12:00:00")
+        // que MySQL no podia comparar contra NOW(), asi que esto nunca devolvia
+        // ningun viaje aunque estuvieran programados a futuro.
         return DB::table('viajes as v')
             ->leftJoin('vehiculos as b', 'v.bus_id', '=', 'b.id')
+            ->leftJoin('tipos_buses as tb', 'v.tipo_bus_id', '=', 'tb.id')
             ->where('v.ruta_id', $rutaId)
             ->whereIn('v.estado', ['Programado', 'Activo'])
-            ->whereRaw("CONCAT(v.fecha_salida, ' ', v.hora_salida) > NOW()")
-            ->select('v.id', 'v.fecha_salida', 'v.hora_salida', 'b.placa')
+            ->where('v.fecha_salida', '>', now())
+            ->select('v.id', 'v.fecha_salida', 'v.hora_salida', 'b.placa',
+                DB::raw('tb.nombre as tipo_bus'), DB::raw('tb.capacidad as capacidad_pasajeros'))
             ->orderBy('v.fecha_salida')
             ->get();
     }

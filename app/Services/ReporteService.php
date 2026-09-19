@@ -241,4 +241,67 @@ class ReporteService
 
         return $q->orderByDesc('cb.fecha_creacion')->get();
     }
+
+    /** `$sucursalId` trae encomiendas que salen O llegan a esa sucursal (misma sede reparte y recibe). */
+    private function filtrarPorSucursalEncomienda($q, ?int $sucursalId)
+    {
+        if ($sucursalId) {
+            $q->where(function ($w) use ($sucursalId) {
+                $w->where('e.sucursal_origen_id', $sucursalId)->orWhere('e.sucursal_destino_id', $sucursalId);
+            });
+        }
+
+        return $q;
+    }
+
+    /** Listado de encomiendas para el reporte: quién envió, quién recibe, cuánto pagó y en qué estado va. */
+    public function obtenerEncomiendas(?string $fechaInicio, ?string $fechaFin, ?int $sucursalId = null, ?string $estado = null)
+    {
+        $q = DB::table('encomiendas as e')
+            ->join('viajes as v', 'e.viaje_id', '=', 'v.id')
+            ->join('rutas as r', 'v.ruta_id', '=', 'r.id')
+            ->leftJoin('detalles_encomienda as d', 'd.encomienda_id', '=', 'e.id')
+            ->leftJoin('terminales as to_suc', 'e.sucursal_origen_id', '=', 'to_suc.id')
+            ->leftJoin('terminales as td_suc', 'e.sucursal_destino_id', '=', 'td_suc.id')
+            ->leftJoin('usuarios as u', 'e.usuario_creacion_id', '=', 'u.id')
+            ->select([
+                'e.id', 'e.codigo_guia', 'e.fecha_registro', 'e.fecha_actualizacion',
+                'e.remitente_nombre', 'e.destinatario_nombre', 'e.destinatario_telefono',
+                'e.total_pagar', 'e.estado_pago', 'e.estado',
+                DB::raw('d.peso_kg as peso'), DB::raw('d.descripcion as contenido'),
+                DB::raw("CONCAT(r.origen, ' - ', r.destino) as ruta"),
+                DB::raw('to_suc.nombre_sede as sucursal_origen'), DB::raw('td_suc.nombre_sede as sucursal_destino'),
+                DB::raw("CONCAT(u.nombres, ' ', u.apellidos) as registrado_por"),
+            ]);
+
+        if ($fechaInicio && $fechaFin) {
+            $q->whereRaw('DATE(e.fecha_registro) BETWEEN ? AND ?', [$fechaInicio, $fechaFin]);
+        }
+        if ($estado) {
+            $q->where('e.estado', $estado);
+        }
+        $this->filtrarPorSucursalEncomienda($q, $sucursalId);
+
+        return $q->orderByDesc('e.fecha_registro')->get();
+    }
+
+    public function obtenerEstadisticasEncomiendas(?string $fechaInicio, ?string $fechaFin, ?int $sucursalId = null): object
+    {
+        $q = DB::table('encomiendas as e')
+            ->leftJoin('detalles_encomienda as d', 'd.encomienda_id', '=', 'e.id');
+
+        if ($fechaInicio && $fechaFin) {
+            $q->whereRaw('DATE(e.fecha_registro) BETWEEN ? AND ?', [$fechaInicio, $fechaFin]);
+        }
+        $this->filtrarPorSucursalEncomienda($q, $sucursalId);
+
+        return $q->selectRaw("
+                COUNT(DISTINCT e.id) as total,
+                COALESCE(SUM(e.total_pagar), 0) as total_ingresos,
+                COALESCE(SUM(d.peso_kg), 0) as total_peso,
+                SUM(CASE WHEN e.estado = 'ENTREGADO' THEN 1 ELSE 0 END) as entregadas,
+                SUM(CASE WHEN e.estado <> 'ENTREGADO' THEN 1 ELSE 0 END) as pendientes,
+                SUM(CASE WHEN e.estado_pago = 'PENDIENTE' THEN 1 ELSE 0 END) as pago_pendiente
+            ")->first();
+    }
 }

@@ -13,15 +13,20 @@ use Illuminate\Support\Facades\DB;
  */
 class DashboardService
 {
-    /** Ingresos y boletos vendidos del periodo, con desglose efectivo / QR. */
+    /** Ingresos y boletos vendidos del periodo, con desglose efectivo / QR fijo / Libélula. */
     public function resumenVentas(string $desde, string $hasta, $sucursal): object
     {
         $q = DB::table('boletos as b')
+            ->leftJoin('libelula_cobros as lc', function ($j) {
+                $j->on('lc.boleto_id', '=', 'b.id')->whereIn('lc.estado', ['pagado', 'pagado_sin_aplicar']);
+            })
             ->where('b.estado', 'vendido')
             ->whereRaw('DATE(COALESCE(b.fecha_pago, b.fecha_reserva)) BETWEEN ? AND ?', [$desde, $hasta])
             ->selectRaw("COUNT(*) AS boletos,
                 COALESCE(SUM(b.precio_final), 0) AS ingresos,
                 COALESCE(SUM(CASE WHEN b.metodo_pago = 'QR' THEN b.precio_final ELSE 0 END), 0) AS ingresos_qr,
+                COALESCE(SUM(CASE WHEN b.metodo_pago = 'QR' AND lc.id IS NOT NULL THEN b.precio_final ELSE 0 END), 0) AS ingresos_qr_libelula,
+                COALESCE(SUM(CASE WHEN b.metodo_pago = 'QR' AND lc.id IS NULL THEN b.precio_final ELSE 0 END), 0) AS ingresos_qr_fijo,
                 COALESCE(SUM(CASE WHEN b.metodo_pago <> 'QR' THEN b.precio_final ELSE 0 END), 0) AS ingresos_efectivo");
         if ($sucursal) {
             $q->where('b.sucursal_id', (int) $sucursal);

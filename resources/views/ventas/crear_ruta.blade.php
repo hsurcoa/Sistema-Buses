@@ -141,7 +141,7 @@
                                                     </td>
                                                     <td class="align-middle text-center">
                                                         <div class="d-inline-flex gap-2">
-                                                            <button type="button" class="btn btn-sm btn-white text-secondary border shadow-sm rounded-3 btn-editar-ruta" data-id="<?php echo $viaje->id; ?>" title="Editar Ruta">
+                                                            <button type="button" class="btn btn-sm btn-white text-secondary border shadow-sm rounded-3 btn-editar-ruta" data-id="<?php echo $viaje->id; ?>" title="Editar Viaje">
                                                                 <i class="bi bi-pencil-square text-warning fs-6"></i>
                                                             </button>
                                                             <button type="button" class="btn btn-sm btn-white text-secondary border shadow-sm rounded-3 btn-despachar-ruta" data-id="<?php echo $viaje->id; ?>" title="Despachar Bus (Finalizar Viaje)">
@@ -446,6 +446,12 @@
                                             <div class="form-floating mb-1">
                                                 <input type="number" class="form-control border shadow-sm fw-bold text-success" id="precioBase" name="precio_base" step="0.01" min="0" placeholder="0.00" required style="border-radius: 12px; font-size: 1.2rem; background-color: #f8f9fa;">
                                                 <label for="precioBase" class="text-muted"><i class="bi bi-cash-stack me-1"></i>Precio Base (Bs.)</label>
+                                            </div>
+                                            <div id="avisoPrecioBase" class="mb-1"></div>
+                                            <div class="form-text">
+                                                Solo se cobra si el pasajero sube y baja en las paradas de siempre y esa ruta <strong>no</strong> tiene
+                                                un precio por tramo cargado. Si ya configuraste "Precio por tramo" en Rutas y tarifas, ese manda y este campo se ignora.
+                                                <a href="#" id="linkVerTarifasPorTramo" target="_blank">Ver/editar precios por tramo de esta ruta →</a>
                                             </div>
                                         </div>
 
@@ -1153,6 +1159,22 @@
     document.getElementById('horaLlegada').addEventListener('change', calcularDuracion);
     document.getElementById('precioBase').addEventListener('input', actualizarPrecio);
     document.getElementById('rutaSelect').addEventListener('change', mostrarVistaPrevia);
+    document.getElementById('rutaSelect').addEventListener('change', function() {
+        const link = document.getElementById('linkVerTarifasPorTramo');
+        const aviso = document.getElementById('avisoPrecioBase');
+        if (link) link.href = this.value ? `<?php echo URLROOT; ?>/admin/rutas_paradas?ruta=${this.value}` : '#';
+
+        if (!this.value || !aviso) { if (aviso) aviso.innerHTML = ''; return; }
+        aviso.innerHTML = '<span class="badge bg-light text-muted border"><i class="bi bi-hourglass-split me-1"></i>Verificando...</span>';
+        fetch(`<?php echo URLROOT; ?>/admin/ruta_tiene_tarifa_completa/${this.value}`)
+            .then(r => r.json())
+            .then(res => {
+                aviso.innerHTML = res.tiene
+                    ? `<span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle-fill me-1"></i>Ya hay precio por tramo (Bs. ${parseFloat(res.precio).toFixed(2)}) — este campo no se va a usar</span>`
+                    : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"><i class="bi bi-exclamation-triangle-fill me-1"></i>No hay tramo completo cargado — este será el precio real hasta que lo carguen</span>';
+            })
+            .catch(() => { aviso.innerHTML = ''; });
+    });
     document.getElementById('selectBus').addEventListener('change', function() {
         cargarTripulacion(this.value);
     });
@@ -2591,9 +2613,9 @@
                     // Configurar visuales según modo
                     if (mode === 'edit') {
                         // Premium Gold Accent
-                        modalTitle.innerHTML = '<span class="text-warning"><i class="bi bi-pencil-square me-2"></i>Editar Ruta</span>';
+                        modalTitle.innerHTML = '<span class="text-warning"><i class="bi bi-pencil-square me-2"></i>Editar Viaje</span>';
                         if (modalDesc) modalDesc.innerHTML = '<span class="badge bg-warning text-dark me-2">Modo Edición</span> Modifique los detalles del viaje seleccionado';
-                        saveBtn.innerHTML = '<b><i class="bi bi-check2-circle me-2"></i>Actualizar Ruta</b>';
+                        saveBtn.innerHTML = '<b><i class="bi bi-check2-circle me-2"></i>Actualizar Viaje</b>';
 
                         // Mostrar botón de eliminar en modo edición
                         if (btnEliminar) btnEliminar.style.display = 'inline-block';

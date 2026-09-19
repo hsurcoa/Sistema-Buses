@@ -71,6 +71,17 @@ class TramoService
     }
 
     /**
+     * Si ya hay un precio por tramo cargado para el trayecto completo
+     * (origen -> destino final, sin paradas intermedias elegidas), el
+     * "Precio Base" del viaje (pestaña Servicios y Precio) queda sin efecto:
+     * este manda siempre. Sirve para avisarle al usuario en esa pantalla.
+     */
+    public function tieneTarifaCompleta(int $rutaId): ?float
+    {
+        return $this->tarifa($rutaId, 0, self::DESTINO);
+    }
+
+    /**
      * Asientos ocupados del viaje para el tramo [ordenSubida, ordenBajada).
      * Sin tramo se considera la ruta completa (cualquier boleto ocupa).
      */

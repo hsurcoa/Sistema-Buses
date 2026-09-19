@@ -174,13 +174,11 @@ $qs = function ($cambios) use ($data) {
                 <div class="col-xl-8">
                     <section class="panel">
                         <div class="panel-h">
-                            <h5>Ingresos <?php echo $data['periodo'] === '12m' ? 'por mes' : 'por día'; ?></h5>
-                            <div class="leyenda"><span><i style="background: var(--accent)"></i>Efectivo</span><span><i style="background: var(--accent-emerald)"></i>QR</span></div>
+                            <h5>Ingresos por vía de pago</h5>
+                            <div class="text-muted small"><?php echo $bs($data['ventas']->ingresos); ?> en el periodo</div>
                         </div>
                         <div class="panel-b">
-                            <div style="position: relative; height: 280px;">
-                                <canvas id="graficoIngresos" role="img" aria-label="Gráfico de ingresos por <?php echo $data['periodo'] === '12m' ? 'mes' : 'día'; ?>"></canvas>
-                            </div>
+                            <div id="graficoIngresos" style="height: 300px;" role="img" aria-label="Gráfico de ingresos por vía de pago: efectivo, QR fijo y Libélula"></div>
                         </div>
                     </section>
                 </div>
@@ -320,48 +318,70 @@ $qs = function ($cambios) use ($data) {
     </div>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highcharts@11/highcharts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highcharts@11/highcharts-3d.js"></script>
 <script>
     (function() {
-        const serie = <?php echo json_encode($data['serie_diaria'], JSON_UNESCAPED_UNICODE); ?>;
-        const canvas = document.getElementById('graficoIngresos');
-        if (!canvas || typeof Chart === 'undefined') return;
+        const contenedor = document.getElementById('graficoIngresos');
+        if (!contenedor || typeof Highcharts === 'undefined') return;
+
+        const v = <?php echo json_encode([
+            'efectivo' => (float) $data['ventas']->ingresos_efectivo,
+            'qr_fijo' => (float) $data['ventas']->ingresos_qr_fijo,
+            'libelula' => (float) $data['ventas']->ingresos_qr_libelula,
+        ]); ?>;
 
         const css = getComputedStyle(document.body);
         const token = (n, def) => (css.getPropertyValue(n) || def).trim();
         const colorTexto = token('--color-text-muted', '#6b7280');
-        const colorGrilla = token('--color-border', '#e5e7eb');
-        const fmt = v => 'Bs ' + Number(v).toLocaleString('es-BO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const fmt = val => 'Bs ' + Number(val).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: serie.map(d => d.etiqueta),
-                datasets: [
-                    { label: 'Efectivo', data: serie.map(d => d.efectivo), backgroundColor: token('--accent', '#6366f1'), borderRadius: 4, stack: 'i' },
-                    { label: 'QR', data: serie.map(d => d.qr), backgroundColor: token('--accent-emerald', '#10b981'), borderRadius: 4, stack: 'i' },
-                ]
+        const datos = [
+            { name: 'Efectivo', y: v.efectivo, color: token('--accent-emerald', '#10b981') },
+            { name: 'QR Fijo', y: v.qr_fijo, color: token('--accent-amber', '#f59e0b') },
+            { name: 'Libélula', y: v.libelula, color: token('--accent', '#6366f1') },
+        ].filter(d => d.y > 0);
+
+        if (!datos.length) {
+            contenedor.innerHTML = '<div class="vacio">Sin ventas en el periodo.</div>';
+            return;
+        }
+
+        Highcharts.chart(contenedor, {
+            chart: {
+                type: 'pie',
+                backgroundColor: 'transparent',
+                options3d: { enabled: true, alpha: 50, beta: 0 },
+                animation: { duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 900 },
+                style: { fontFamily: 'inherit' },
             },
-            options: {
-                maintainAspectRatio: false,
-                animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 400 },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
-                            footer: items => {
-                                const d = serie[items[0].dataIndex];
-                                return `Total ${fmt(d.efectivo + d.qr)} · ${d.boletos} boletos`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { stacked: true, grid: { display: false }, ticks: { color: colorTexto, maxRotation: 0, autoSkipPadding: 12 } },
-                    y: { stacked: true, beginAtZero: true, grid: { color: colorGrilla }, ticks: { color: colorTexto, callback: fmt } }
+            title: { text: '' },
+            credits: { enabled: false },
+            tooltip: {
+                formatter: function () {
+                    return `<b>${this.point.name}</b><br>${fmt(this.y)} · ${this.point.percentage.toFixed(1)}%`;
                 }
-            }
+            },
+            legend: {
+                itemStyle: { color: colorTexto, fontWeight: '600' },
+                itemHoverStyle: { color: token('--color-text', '#111827') },
+            },
+            plotOptions: {
+                pie: {
+                    innerSize: '35%', // dona 3D: se ve mejor con el "hueco" en el centro
+                    depth: 38,
+                    showInLegend: true,
+                    allowPointSelect: true,
+                    cursor: 'pointer',
+                    dataLabels: {
+                        enabled: true,
+                        format: '{point.percentage:.1f}%',
+                        style: { color: colorTexto, textOutline: 'none', fontWeight: '600' },
+                    },
+                    states: { hover: { halo: { size: 8 } } },
+                }
+            },
+            series: [{ name: 'Ingresos', colorByPoint: true, data: datos }],
         });
     })();
 </script>

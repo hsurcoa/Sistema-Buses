@@ -1087,17 +1087,78 @@ class AdminController extends Controller
         ]);
     }
 
+    /** Arancel de encomiendas: catálogo de tipos de paquete y su precio (base + cargo por kg excedente). */
+    public function tiposEncomienda()
+    {
+        return view('admin.tipos_encomienda', ['data' => [
+            'title' => 'Arancel de Encomiendas',
+            'tipos' => $this->rutas->obtenerTodosTiposEncomienda(),
+            'es_admin' => $this->esAdministrador(),
+        ]]);
+    }
+
+    public function guardarTipoEncomienda(Request $request)
+    {
+        $volver = fn (string $msg, string $detalle = '') => redirect(URLROOT.'/admin/tipos_encomienda?msg='.$msg.($detalle !== '' ? '&detalle='.urlencode($detalle) : ''));
+
+        if (! $this->esAdministrador()) {
+            return $volver('error', 'Solo un Administrador puede cambiar el arancel de encomiendas.');
+        }
+
+        $resultado = $this->rutas->guardarTipoEncomienda([
+            'id' => (int) $request->input('id', 0),
+            'nombre' => trim($request->input('nombre', '')),
+            'descripcion' => trim($request->input('descripcion', '')) ?: null,
+            'precio_extra' => (float) $request->input('precio_extra', 0),
+            'peso_incluido_kg' => $request->filled('peso_incluido_kg') ? (float) $request->input('peso_incluido_kg') : null,
+            'precio_por_kg_excedente' => (float) $request->input('precio_por_kg_excedente', 0),
+        ]);
+
+        return $resultado['status'] ? $volver('guardado') : $volver('error', $resultado['message']);
+    }
+
+    public function cambiarEstadoTipoEncomienda(int $id)
+    {
+        if ($this->esAdministrador()) {
+            $this->rutas->cambiarEstadoTipoEncomienda($id);
+        }
+
+        return redirect(URLROOT.'/admin/tipos_encomienda');
+    }
+
+    public function eliminarTipoEncomienda(int $id)
+    {
+        if (! $this->esAdministrador()) {
+            return redirect(URLROOT.'/admin/tipos_encomienda?msg=error&detalle='.urlencode('Solo un Administrador puede eliminar tipos del arancel.'));
+        }
+
+        $resultado = $this->rutas->eliminarTipoEncomienda($id);
+
+        return $resultado['status']
+            ? redirect(URLROOT.'/admin/tipos_encomienda?msg=eliminado')
+            : redirect(URLROOT.'/admin/tipos_encomienda?msg=error&detalle='.urlencode($resultado['message']));
+    }
+
+    /** Para el aviso en "Editar Viaje" (pestaña Servicios y Precio): si ya hay tramo completo cargado, el Precio Base del viaje no se usa. */
+    public function rutaTieneTarifaCompleta(int $rutaId)
+    {
+        $precio = $this->tramos->tieneTarifaCompleta($rutaId);
+
+        return response()->json(['tiene' => $precio !== null, 'precio' => $precio]);
+    }
+
     public function cotizarEnvio(Request $request)
     {
         $data = json_decode($request->getContent(), true);
         $paradaId = $data['parada_id'] ?? null;
         $tipo = $data['tipo'] ?? 'pasajero';
         $paqueteId = $data['paquete_id'] ?? null;
+        $peso = (float) ($data['peso'] ?? 0);
 
         if (! $paradaId) {
             return response()->json(['status' => false, 'message' => 'Faltan datos']);
         }
 
-        return response()->json($this->rutas->calcularPrecioDinamico((int) $paradaId, $tipo, $paqueteId ? (int) $paqueteId : null));
+        return response()->json($this->rutas->calcularPrecioDinamico((int) $paradaId, $tipo, $paqueteId ? (int) $paqueteId : null, $peso));
     }
 }

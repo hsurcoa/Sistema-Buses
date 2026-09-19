@@ -347,6 +347,12 @@
                                     </a>
                                 </li>
                                 <li class="nav-item">
+                                    <a href="{{ URLROOT }}/admin/tipos_encomienda" class="nav-link">
+                                        <i class="nav-icon bi bi-tag"></i>
+                                        <p>Arancel de Encomiendas</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
                                     <a href="{{ URLROOT }}/admin/tipos_buses" class="nav-link">
                                         <i class="nav-icon bi bi-sliders"></i>
                                         <p>Tipos de Buses</p>
@@ -388,6 +394,12 @@
                                     <a href="{{ URLROOT }}/reportes/cancelaciones" class="nav-link">
                                         <i class="nav-icon bi bi-arrow-counterclockwise"></i>
                                         <p>Bitácora de Cancelaciones</p>
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a href="{{ URLROOT }}/reportes/encomiendas" class="nav-link">
+                                        <i class="nav-icon bi bi-box-seam"></i>
+                                        <p>Reporte de Encomiendas</p>
                                     </a>
                                 </li>
                             </ul>

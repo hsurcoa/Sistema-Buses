@@ -164,6 +164,36 @@ class ReportesController extends Controller
         return response()->json(['status' => 'success', 'data' => $data]);
     }
 
+    public function encomiendas(Request $request)
+    {
+        $fechaInicio = date('Y-m-d', strtotime('-30 days'));
+        $fechaFin = date('Y-m-d');
+        $sucursalId = $this->sucursalId($request);
+
+        return view('reportes.encomiendas', ['data' => array_merge([
+            'titulo' => 'Reporte de Encomiendas',
+            'menu_activo' => 'reportes',
+            'fecha_inicio' => $fechaInicio,
+            'fecha_fin' => $fechaFin,
+            'encomiendas' => $this->reportes->obtenerEncomiendas($fechaInicio, $fechaFin, $sucursalId),
+            'stats' => $this->reportes->obtenerEstadisticasEncomiendas($fechaInicio, $fechaFin, $sucursalId),
+        ], $this->datosSucursal($request))]);
+    }
+
+    public function encomiendasAjax(Request $request)
+    {
+        $sucursalId = $this->sucursalId($request);
+        $fechaInicio = $request->input('fecha_inicio', '');
+        $fechaFin = $request->input('fecha_fin', '');
+        $estado = $request->input('estado') ?: null;
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $this->reportes->obtenerEncomiendas($fechaInicio, $fechaFin, $sucursalId, $estado),
+            'stats' => $this->reportes->obtenerEstadisticasEncomiendas($fechaInicio, $fechaFin, $sucursalId),
+        ]);
+    }
+
     /** Procesa la devolución de una cancelación que había quedado pendiente. */
     public function procesarDevolucionAjax(Request $request)
     {

@@ -124,7 +124,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/admin/estadisticas_asientos/{tipoBusId}', [AdminController::class, 'estadisticasAsientos'])->name('admin.estadisticas_asientos');
 
         Route::get('/admin/obtener_info_ruta_json/{rutaId}', [AdminController::class, 'obtenerInfoRutaJson'])->name('admin.obtener_info_ruta_json');
+        Route::get('/admin/ruta_tiene_tarifa_completa/{rutaId}', [AdminController::class, 'rutaTieneTarifaCompleta'])->name('admin.ruta_tiene_tarifa_completa');
         Route::post('/admin/cotizar_envio', [AdminController::class, 'cotizarEnvio'])->name('admin.cotizar_envio');
+
+        Route::get('/admin/tipos_encomienda', [AdminController::class, 'tiposEncomienda'])->name('admin.tipos_encomienda');
+        Route::post('/admin/guardar_tipo_encomienda', [AdminController::class, 'guardarTipoEncomienda'])->name('admin.guardar_tipo_encomienda');
+        Route::get('/admin/cambiar_estado_tipo_encomienda/{id}', [AdminController::class, 'cambiarEstadoTipoEncomienda'])->name('admin.cambiar_estado_tipo_encomienda');
+        Route::get('/admin/eliminar_tipo_encomienda/{id}', [AdminController::class, 'eliminarTipoEncomienda'])->name('admin.eliminar_tipo_encomienda');
 
         Route::post('/vehiculos/guardar', [VehiculosController::class, 'guardar'])->name('vehiculos.guardar');
         Route::get('/vehiculos/generarPDF', [VehiculosController::class, 'generarPdf'])->name('vehiculos.generarPDF');
@@ -150,6 +156,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/encomiendas/obtener_viajes/{rutaId}', [EncomiendasController::class, 'obtenerViajes'])->name('encomiendas.obtener_viajes');
         Route::post('/encomiendas/guardar', [EncomiendasController::class, 'guardar'])->name('encomiendas.guardar');
         Route::get('/encomiendas/recibo/{id}', [EncomiendasController::class, 'recibo'])->name('encomiendas.recibo');
+        Route::post('/encomiendas/cambiar_estado/{id}', [EncomiendasController::class, 'cambiarEstado'])->name('encomiendas.cambiar_estado');
 
         // Fase 7 (Reportes): ver
         // docs/superpowers/plans/2026-09-17-migracion-laravel-fase7-plan.md.
@@ -164,6 +171,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/reportes/financiero_ajax', [ReportesController::class, 'financieroAjax'])->name('reportes.financiero_ajax');
         Route::get('/reportes/cancelaciones', [ReportesController::class, 'cancelaciones'])->name('reportes.cancelaciones');
         Route::post('/reportes/cancelaciones_ajax', [ReportesController::class, 'cancelacionesAjax'])->name('reportes.cancelaciones_ajax');
+        Route::get('/reportes/encomiendas', [ReportesController::class, 'encomiendas'])->name('reportes.encomiendas');
+        Route::post('/reportes/encomiendas_ajax', [ReportesController::class, 'encomiendasAjax'])->name('reportes.encomiendas_ajax');
         Route::post('/reportes/procesar_devolucion', [ReportesController::class, 'procesarDevolucionAjax'])->name('reportes.procesar_devolucion');
 
         // Fase 8 (Backup, ultima del roadmap original): ver

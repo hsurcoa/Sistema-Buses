@@ -960,7 +960,65 @@ class RutaService
         return DB::table('encomienda_tipos')->where('estado', 1)->orderBy('precio_extra')->get();
     }
 
-    public function calcularPrecioDinamico(int $paradaId, string $tipo, ?int $tipoPaqueteId = null): array
+    /** Todos los tipos (activos e inactivos), para la pantalla de administración del arancel. */
+    public function obtenerTodosTiposEncomienda()
+    {
+        return DB::table('encomienda_tipos')->orderBy('estado', 'desc')->orderBy('precio_extra')->get();
+    }
+
+    public function guardarTipoEncomienda(array $datos): array
+    {
+        if ($datos['nombre'] === '') {
+            return ['status' => false, 'message' => 'El nombre es obligatorio.'];
+        }
+        if ($datos['precio_extra'] < 0 || $datos['precio_por_kg_excedente'] < 0) {
+            return ['status' => false, 'message' => 'Los precios no pueden ser negativos.'];
+        }
+
+        $fila = [
+            'nombre' => $datos['nombre'],
+            'descripcion' => $datos['descripcion'],
+            'precio_extra' => $datos['precio_extra'],
+            'peso_incluido_kg' => $datos['peso_incluido_kg'],
+            'precio_por_kg_excedente' => $datos['precio_por_kg_excedente'],
+        ];
+
+        if (! empty($datos['id'])) {
+            DB::table('encomienda_tipos')->where('id', $datos['id'])->update($fila);
+
+            return ['status' => true, 'id' => $datos['id']];
+        }
+
+        $fila['estado'] = 1;
+        $id = DB::table('encomienda_tipos')->insertGetId($fila);
+
+        return ['status' => true, 'id' => $id];
+    }
+
+    public function cambiarEstadoTipoEncomienda(int $id): bool
+    {
+        $actual = DB::table('encomienda_tipos')->where('id', $id)->value('estado');
+        if ($actual === null) {
+            return false;
+        }
+
+        return (bool) DB::table('encomienda_tipos')->where('id', $id)->update(['estado' => $actual ? 0 : 1]);
+    }
+
+    /** Solo se puede borrar si ninguna encomienda lo usó (si no, se desactiva en vez de borrar). */
+    public function eliminarTipoEncomienda(int $id): array
+    {
+        $enUso = DB::table('detalles_encomienda')->where('tipo_paquete_id', $id)->exists();
+        if ($enUso) {
+            return ['status' => false, 'message' => 'Este tipo ya se usó en encomiendas registradas: desactívelo en vez de eliminarlo.'];
+        }
+
+        DB::table('encomienda_tipos')->where('id', $id)->delete();
+
+        return ['status' => true];
+    }
+
+    public function calcularPrecioDinamico(int $paradaId, string $tipo, ?int $tipoPaqueteId = null, float $peso = 0): array
     {
         $parada = DB::table('rutas_paradas')->where('id', $paradaId)->first();
         if (! $parada) {
@@ -984,6 +1042,19 @@ class RutaService
                     $extra = (float) $paquete->precio_extra;
                     $precioFinal += $extra;
                     $detalles[] = 'Tipo: '.$paquete->nombre.' (+'.number_format($extra, 2).' Bs)';
+
+                    // El peso solo suma si pasa del incluido en el tipo de paquete
+                    // (p. ej. "Caja pequeña" ya cubre hasta 5kg en precio_extra;
+                    // lo que pese de mas se cobra por kg). Sin peso_incluido_kg
+                    // cargado, el tipo no tiene tope de peso.
+                    if ($paquete->peso_incluido_kg !== null && $peso > (float) $paquete->peso_incluido_kg) {
+                        $excedente = $peso - (float) $paquete->peso_incluido_kg;
+                        $cargoPeso = $excedente * (float) $paquete->precio_por_kg_excedente;
+                        if ($cargoPeso > 0) {
+                            $precioFinal += $cargoPeso;
+                            $detalles[] = number_format($excedente, 2).'kg extra × '.number_format((float) $paquete->precio_por_kg_excedente, 2).' Bs/kg (+'.number_format($cargoPeso, 2).' Bs)';
+                        }
+                    }
                 }
             }
         }

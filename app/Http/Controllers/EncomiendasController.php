@@ -49,6 +49,18 @@ class EncomiendasController extends Controller
         return response()->json($this->encomiendas->listarViajesFuturosPorRuta($rutaId));
     }
 
+    /** Avanza el estado de una encomienda (recepción en almacén, despacho, llegada, entrega). */
+    public function cambiarEstado(Request $request, int $id)
+    {
+        $resultado = $this->encomiendas->cambiarEstado(
+            $id,
+            (string) $request->input('estado', ''),
+            $request->input('clave_retiro')
+        );
+
+        return response()->json($resultado);
+    }
+
     public function guardar(Request $request)
     {
         // El legacy sanitizaba TODO $_POST con FILTER_SANITIZE_SPECIAL_CHARS
@@ -59,8 +71,9 @@ class EncomiendasController extends Controller
 
         $paradaId = (int) $post('parada_id');
         $tipoPaqueteId = (int) $post('tipo_paquete_id');
+        $peso = (float) $post('peso', '0');
 
-        $calculo = $this->rutas->calcularPrecioDinamico($paradaId, 'encomienda', $tipoPaqueteId ?: null);
+        $calculo = $this->rutas->calcularPrecioDinamico($paradaId, 'encomienda', $tipoPaqueteId ?: null, $peso);
 
         if (! $calculo['status']) {
             abort(400, 'Error al calcular precio: '.$calculo['message']);

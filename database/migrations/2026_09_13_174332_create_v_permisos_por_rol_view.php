@@ -10,7 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("CREATE VIEW `v_permisos_por_rol` AS select `r`.`id` AS `rol_id`,`r`.`nombre` AS `rol_nombre`,`p`.`id` AS `permiso_id`,`p`.`grupo` AS `grupo`,`p`.`vista` AS `vista`,`p`.`clave` AS `clave`,`rp`.`fecha_asignacion` AS `fecha_asignacion` from ((`sistema_transportes`.`roles` `r` join `sistema_transportes`.`rol_permiso` `rp` on(`r`.`id` = `rp`.`rol_id`)) join `sistema_transportes`.`permisos` `p` on(`rp`.`permiso_id` = `p`.`id`)) where `r`.`activo` = 1 and `p`.`activo` = 1 order by `r`.`nombre`,`p`.`grupo`,`p`.`orden`");
+        // Sin calificar `roles`/`rol_permiso`/`permisos` con la BD: el nombre real de la
+        // BD varia por entorno (kitloong/laravel-migrations-generator lo dejaba fijo a
+        // "sistema_transportes", rompiendo la vista en cualquier otra instancia).
+        DB::statement("CREATE VIEW `v_permisos_por_rol` AS select `r`.`id` AS `rol_id`,`r`.`nombre` AS `rol_nombre`,`p`.`id` AS `permiso_id`,`p`.`grupo` AS `grupo`,`p`.`vista` AS `vista`,`p`.`clave` AS `clave`,`rp`.`fecha_asignacion` AS `fecha_asignacion` from ((`roles` `r` join `rol_permiso` `rp` on(`r`.`id` = `rp`.`rol_id`)) join `permisos` `p` on(`rp`.`permiso_id` = `p`.`id`)) where `r`.`activo` = 1 and `p`.`activo` = 1 order by `r`.`nombre`,`p`.`grupo`,`p`.`orden`");
     }
 
     /**

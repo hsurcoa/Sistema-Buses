@@ -33,19 +33,39 @@ autenticación nativa de Laravel.
 - **Reportes** (`ReportesController`) — ventas, financiero, cancelaciones, encomiendas; exportables a PDF/Excel/Word.
 - **Backup** (`BackupController`) — respaldo de la base de datos.
 
-## Instalación local
+## Instalación en un equipo nuevo
+
+No hace falta ningún dump `.sql`: las 67 migraciones recrean el esquema
+completo (tablas, índices, vistas) y `php artisan migrate --seed` deja una
+instancia usable desde cero, con datos base y un usuario para entrar.
 
 ```bash
 composer install
 cp .env.example .env
 php artisan key:generate
-# Configurar DB_* en .env (MySQL/MariaDB) y APP_TIMEZONE según el entorno
+# Crear la base vacia (mismo nombre que DB_DATABASE en .env.example: sistema_transportes)
 php artisan migrate --seed
 php artisan serve
 ```
 
-> `APP_TIMEZONE` debe fijarse a mano en cada entorno nuevo (no viene seteado
-> por defecto en `.env.example`).
+`.env.example` ya trae `DB_CONNECTION=mysql`, `APP_TIMEZONE=America/La_Paz` y
+`APP_LOCALE=es` listos para este proyecto — solo hace falta ajustar
+`DB_USERNAME`/`DB_PASSWORD` si el MySQL local no usa `root` sin contraseña
+(el default de XAMPP).
+
+El seed (`DatabaseSeeder`) crea:
+
+- Rol **Administrador** y un usuario para loguearse: `admin@sistema.local` /
+  `Admin12345!` — **cambiar la contraseña después del primer login**.
+- Catálogo base (`PandoSeeder`): terminales, rutas, tipos de bus, vehículos,
+  personal y clientes de ejemplo.
+
+Para además ver viajes/boletos/encomiendas de prueba (datos transaccionales,
+no catálogo), correr aparte — asume una caja ya abierta del usuario 1:
+
+```bash
+php artisan db:seed --class=TestDataSeeder
+```
 
 ## Tests
 

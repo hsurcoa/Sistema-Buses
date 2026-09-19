@@ -32,7 +32,11 @@ return new class extends Migration
             $table->text('notas')->nullable();
             $table->timestamp('fecha_creacion')->nullable()->useCurrent();
             $table->timestamp('fecha_actualizacion')->useCurrentOnUpdate()->nullable()->useCurrent();
-            $table->enum('estado', ['Activo', 'Programado', 'Inactivo', 'programado', 'abordando', 'en_ruta', 'finalizado', 'cancelado'])->nullable()->default('Programado');
+            // 'programado' (minuscula) se saca del ENUM: MySQL la considera duplicada de
+            // 'Programado' bajo collation *_ci y rompe el CREATE TABLE en una instalacion
+            // nueva. El codigo ya compara con LOWER() (ver auditoria-normalizacion-bd), asi
+            // que no se pierde ningun estado realmente distinto.
+            $table->enum('estado', ['Activo', 'Programado', 'Inactivo', 'abordando', 'en_ruta', 'finalizado', 'cancelado'])->nullable()->default('Programado');
         });
     }
 

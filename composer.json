@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "hsurcoa/venta-pasajes",
     "type": "project",
-    "description": "Sistema de venta de pasajes - migracion incremental a Laravel (patron strangler fig, legacy/ convive con la app Laravel)",
+    "description": "Sistema de venta de pasajes para transporte terrestre: ventas, caja, flota/rutas, encomiendas y reportes en Laravel 11",
     "license": "proprietary",
     "require": {
         "php": "^8.2",
